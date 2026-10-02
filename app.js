@@ -81,7 +81,7 @@ const OVERLAYS = [
   {
     id: 'water-l', name: 'แหล่งน้ำขนาดใหญ่', url: 'data/water-l.geojson', visible: true, opacity: 0.7,
     swatch: '#38bdf8', outline: '#0369a1', titleField: 'name',
-    labels: true, labelClass: 'water-label', labelMinZoom: 7,
+    labels: true, labelClass: 'water-label', labelMinZoom: 7.5,
     // บรรทัดใต้ชื่อเขื่อน: (ความจุ/ปริมาณน้ำ/%)
     labelExtra: p => p.dam_storage == null && p.dam_volume == null ? ''
       : `(${p.dam_storage != null ? fmt(p.dam_storage) : '–'}/${p.dam_volume != null ? fmt(p.dam_volume) : '–'}/${p.dam_percent_storage != null ? `${Math.round(p.dam_percent_storage)}%` : '–'})`,
@@ -96,7 +96,7 @@ const OVERLAYS = [
     // แหล่งน้ำอื่น ๆ (จุด) — เพิ่มจุดได้ใน data/water-other.geojson
     id: 'water-other', name: 'แหล่งน้ำอื่น ๆ', url: 'data/water-other.geojson', visible: true, opacity: 1,
     swatch: '#0284c7', titleField: 'name',
-    labels: true, labelClass: 'water-label', labelMinZoom: 7, labelAnchor: 'left', labelOffset: [15, 0],
+    labels: true, labelClass: 'water-label', labelMinZoom: 7.5, labelAnchor: 'left', labelOffset: [15, 0],
     layers: (src, op) => [
       { id: `${src}-icon`, type: 'symbol', source: src,
         layout: { 'icon-image': 'rect-blue', 'icon-allow-overlap': true, 'icon-ignore-placement': true,
@@ -119,7 +119,7 @@ const OVERLAYS = [
     id: 'streams-main', name: 'ลำน้ำหลัก', url: 'data/streams-main.geojson', visible: true, opacity: 1,
     swatch: '#1d4ed8', titleField: 'STREAM_NAM',
     lineLabels: 'data/streams-main-labels.json',   // จุดวางชื่อตามแนวแม่น้ำ (คำนวณไว้ล่วงหน้า: ตำแหน่ง, มุม, ซูมขั้นต่ำ)
-    labelMinZoom: 7,                               // เริ่มแสดงชื่อพร้อมชื่อทุ่งรับน้ำ
+    labelMinZoom: 7.5,                             // ระดับซูมที่เริ่มแสดงชื่อแม่น้ำ
     layers: (src, op) => [
       { id: `${src}-casing`, type: 'line', source: src, layout: { 'line-cap': 'round', 'line-join': 'round' },
         paint: { 'line-color': '#ffffff', 'line-opacity': op * 0.8,
@@ -133,7 +133,7 @@ const OVERLAYS = [
   {
     id: 'stations', name: 'สถานี', url: 'data/stations.geojson', visible: true, opacity: 1,
     swatch: '#f97316', titleField: 'stn_code',
-    labels: true, labelClass: 'stn-label', labelMinZoom: 7, labelAnchor: 'left', labelOffset: [10, 0],
+    labels: true, labelClass: 'stn-label', labelMinZoom: 7.5, labelAnchor: 'left', labelOffset: [10, 0],
     layers: (src, op) => [
       { id: `${src}-circle`, type: 'circle', source: src,
         paint: { 'circle-color': '#f97316', 'circle-opacity': op, 'circle-stroke-color': '#ffffff', 'circle-stroke-width': 2,
