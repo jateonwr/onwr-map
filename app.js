@@ -40,7 +40,7 @@ const FIELD_LABELS = {
   dam_percent_storage: 'ปริมาณน้ำ (% ความจุ)',
   // ลำน้ำ
   STREAM_ID: 'รหัสลำน้ำ', STREAM_NAM: 'ชื่อลำน้ำ', LOCAL_NAME: 'ชื่อท้องถิ่น',
-  Hy_use_des: 'ลักษณะทางน้ำ', STRCLAS_DE: 'ชั้นลำน้ำ', SHAPE_Leng: 'ความยาว (กม.)',
+  Hy_use_des: 'ลักษณะทางน้ำ', STRCLAS_DE: 'ชั้นลำน้ำ', SHAPE_Leng: 'ความยาว (กม.)', length_km: 'ความยาวรวม (กม.)',
   str_code: 'รหัสลำน้ำ', str_name: 'ชื่อลำน้ำ', SUBBASIN: 'ลุ่มน้ำสาขา', MBASIN: 'ลุ่มน้ำหลัก',
   STREFFCODE: 'รหัสจุดตรวจวัด', EFF_KM: 'กม. ที่', Descp: 'รายละเอียด', Length_km: 'ความยาว (กม.)',
 };
