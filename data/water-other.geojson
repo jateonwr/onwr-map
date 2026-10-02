@@ -17,6 +17,23 @@
      15.501323
     ]
    }
+  },
+  {
+   "type": "Feature",
+   "properties": {
+    "name": "เขื่อนเจ้าพระยา",
+    "lat": 15.158056,
+    "lng": 100.177425,
+    "label_lng": 100.177425,
+    "label_lat": 15.158056
+   },
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     100.177425,
+     15.158056
+    ]
+   }
   }
  ]
 }
