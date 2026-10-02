@@ -164,6 +164,7 @@ for (const cfg of SHEETS) {
     }
 
     renderLayerPanel();
+    updateLabels();
     if (selectedInfo && selectedInfo.o === o) showInfo(o, selectedInfo.f);
   }
 

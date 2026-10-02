@@ -319,6 +319,7 @@ map.on('load', async () => {
         const m = new maplibregl.Marker({ element: el, rotationAlignment: 'map', rotation: d.r }).setLngLat(d.c);
         m.minZoom = d.z;
         m.river = d.n;
+        m.isRiver = true;
         return m;
       });
       // จัดกลุ่มตามชื่อแม่น้ำ (เรียงตามแนวลำน้ำอยู่แล้ว)
@@ -363,7 +364,9 @@ function createLabels(o) {
       el.firstChild.textContent = f.properties[o.titleField];
       if (o.labelExtra) el.children[1].textContent = o.labelExtra(f.properties);
       st.labelEls[f.properties[o.titleField]] = el;
-      return new maplibregl.Marker({ element: el, anchor: o.labelAnchor || 'center', offset: o.labelOffset || [0, 0] }).setLngLat([f.properties.label_lng, f.properties.label_lat]);
+      const m = new maplibregl.Marker({ element: el, anchor: 'center' }).setLngLat([f.properties.label_lng, f.properties.label_lat]);
+      m.movable = !!o.labelAnchor;    // ป้ายของจุด: ย้ายไปรอบจุดได้ (ขวา → ซ้าย → บน → ล่าง)
+      return m;
     });
 }
 function showMarker(m, on) {
@@ -387,12 +390,124 @@ function updateLabels() {
       const visible = on ? group.filter(m => insideInner(m.getLngLat())) : [];
       const fit = visible.filter(m => m.minZoom <= z);
       const pool = fit.length ? fit : visible;
-      const chosen = pool[Math.floor(pool.length / 2)];
+      const mid = Math.floor(pool.length / 2);
+      const chosen = pool[mid];
       group.forEach(m => showMarker(m, m === chosen));
+      // จุดสำรอง (ถ้าตำแหน่งกลางทับป้ายอื่น ให้ลองจุดอื่นตามแนวแม่น้ำ ไล่จากกลางออกไป)
+      if (chosen) chosen.alts = pool.map((m, i) => [m, Math.abs(i - mid)]).filter(([m]) => m !== chosen)
+        .sort((a, b) => a[1] - b[1]).map(([m]) => m).slice(0, 12);
     }
   }
+  resolveLabels();
 }
 map.on('moveend', updateLabels);
+
+/* ============================================================
+ *  จัดป้ายไม่ให้ซ้อนกัน
+ *  1) ป้ายของจุด ลองวาง ขวา → ซ้าย → บน → ล่าง แล้วเลือกตำแหน่งที่ไม่ทับ
+ *  2) ถ้ายังทับ → ซ่อนป้ายที่สำคัญน้อยกว่า (ซูมเข้าแล้วจะกลับมาเอง)
+ *  ไอคอนทุกจุดยังแสดงเสมอ
+ * ============================================================ */
+const LABEL_PRIORITY = {   // มาก = สำคัญกว่า (ได้วางก่อน)
+  visits: 100, stations: 90, 'water-other': 80, 'water-l': 70, tung: 60, 'streams-main': 50, provinces: 40,
+};
+const POINT_ICON_LAYERS = ['visits', 'stations', 'water-other'];
+
+function stopsAt(expr, z) {   // ค่าจาก ['interpolate', ['linear'], ['zoom'], z0, v0, z1, v1, ...]
+  const st = expr.slice(3);
+  if (z <= st[0]) return st[1];
+  for (let i = 2; i < st.length; i += 2) {
+    if (z <= st[i]) return st[i - 1] + (st[i + 1] - st[i - 1]) * (z - st[i - 2]) / (st[i] - st[i - 2]);
+  }
+  return st[st.length - 1];
+}
+
+function resolveLabels() {
+  const z = map.getZoom(), bearing = map.getBearing();
+  const cw = map.getContainer().clientWidth, ch = map.getContainer().clientHeight;
+  const r = Math.max(13 * stopsAt(ICON_SIZE_BY_ZOOM, z), stopsAt(CIRCLE_RADIUS_BY_ZOOM, z) + 2);  // ครึ่งความกว้างไอคอน
+  const PAD = 2, GAP = r + 4;
+
+  // อ่านขนาดทั้งหมดก่อน (ไม่สลับอ่าน/เขียน DOM → ไม่กระตุก)
+  const items = [];
+  for (const o of OVERLAYS) {
+    const st = overlayState[o.id];
+    const pr = LABEL_PRIORITY[o.id] ?? 10;
+    for (const m of [...st.labels, ...(st.lineLabels || [])]) {
+      if (!m.shown) continue;
+      const p = map.project(m.getLngLat());
+      if (p.x < -200 || p.y < -100 || p.x > cw + 200 || p.y > ch + 100) continue;   // นอกจอ
+      const el = m.getElement();
+      items.push({ m, el, pr, p, w: el.offsetWidth, h: el.offsetHeight });
+    }
+  }
+
+  // ปุ่ม/โลโก้/แผงบนจอ: ไม่วางป้ายไว้ใต้ปุ่ม
+  const mb = map.getContainer().getBoundingClientRect();
+  const ui = [...document.querySelectorAll('#btnMeasure, #btnVisits, #onwrLogo, #btnLayers, #btnCompass, #zoomBox, #btnRecord, #btnLocate, #recBar, #measurePanel, #zoneChip')]
+    .filter(el => el.offsetParent && getComputedStyle(el).visibility !== 'hidden')
+    .map(el => { const b = el.getBoundingClientRect(); return { x1: b.left - mb.left - 4, y1: b.top - mb.top - 4, x2: b.right - mb.left + 4, y2: b.bottom - mb.top + 4 }; });
+
+  // ไอคอนของจุดเป็นสิ่งกีดขวาง (ป้ายของจุดและชื่อแม่น้ำไม่วางทับไอคอน)
+  const icons = [];
+  for (const id of POINT_ICON_LAYERS) {
+    const st = overlayState[id];
+    if (!st || !st.visible || !st.data) continue;
+    for (const f of st.data.features) {
+      const p = map.project(f.geometry.coordinates);
+      icons.push({ x1: p.x - r, y1: p.y - r, x2: p.x + r, y2: p.y + r });
+    }
+  }
+
+  const hits = (R, list) => list.some(q => R.x1 < q.x2 && R.x2 > q.x1 && R.y1 < q.y2 && R.y2 > q.y1);
+  const placed = [];
+  const results = [];
+  items.sort((a, b) => b.pr - a.pr);
+  for (const it of items) {
+    let { w, h } = it;
+    if (it.m.isRiver) {   // ป้ายเอียง → ใช้กรอบสี่เหลี่ยมที่ครอบทั้งป้าย
+      const a = ((it.m.getRotation() || 0) - bearing) * Math.PI / 180;
+      [w, h] = [Math.abs(w * Math.cos(a)) + Math.abs(h * Math.sin(a)), Math.abs(w * Math.sin(a)) + Math.abs(h * Math.cos(a))];
+    }
+    const cands = it.m.movable
+      ? [[GAP + w / 2, 0], [-(GAP + w / 2), 0], [0, -(GAP + h / 2)], [0, GAP + h / 2]]
+      : [[0, 0]];
+    const obstacles = it.m.movable || it.m.isRiver ? icons.concat(ui) : ui;
+    const free = R => !hits(R, placed) && !hits(R, obstacles);
+    let ok = null;
+    const onScreen = R => R.x1 >= 0 && R.y1 >= 0 && R.x2 <= cw && R.y2 <= ch;
+    for (const [dx, dy] of cands) {
+      const R = { x1: it.p.x + dx - w / 2 - PAD, y1: it.p.y + dy - h / 2 - PAD, x2: it.p.x + dx + w / 2 + PAD, y2: it.p.y + dy + h / 2 + PAD };
+      // ป้ายของจุด: เลือกด้านที่อยู่ในจอทั้งป้ายก่อน (จุดริมจอจะได้ไม่ล้นออกนอกจอ)
+      if (free(R) && (!it.m.movable || onScreen(R))) { ok = [dx, dy]; placed.push(R); break; }
+    }
+    // ชื่อแม่น้ำ: ลองจุดสำรองตามแนวลำน้ำ (ขนาดป้ายเท่าเดิม ต่างแค่ตำแหน่ง/มุม)
+    if (!ok && it.m.isRiver && it.m.alts) {
+      for (const alt of it.m.alts) {
+        const p = map.project(alt.getLngLat());
+        if (p.x < 0 || p.y < 0 || p.x > cw || p.y > ch) continue;
+        const a = ((alt.getRotation() || 0) - bearing) * Math.PI / 180;
+        const ww = Math.abs(it.w * Math.cos(a)) + Math.abs(it.h * Math.sin(a)), hh = Math.abs(it.w * Math.sin(a)) + Math.abs(it.h * Math.cos(a));
+        const R = { x1: p.x - ww / 2 - PAD, y1: p.y - hh / 2 - PAD, x2: p.x + ww / 2 + PAD, y2: p.y + hh / 2 + PAD };
+        if (free(R)) { placed.push(R); results.push([it, null, null, alt]); ok = 'alt'; break; }
+      }
+      if (ok) continue;
+    }
+    results.push([it, ok, cands[0]]);
+  }
+
+  // เขียนผลลง DOM ทีเดียว
+  for (const [it, ok, first, alt] of results) {
+    if (alt) {   // ย้ายชื่อแม่น้ำไปจุดสำรอง
+      showMarker(it.m, false);
+      showMarker(alt, true);
+      alt.getElement().style.visibility = '';
+      continue;
+    }
+    it.el.style.visibility = ok ? '' : 'hidden';
+    if (it.m.movable) it.m.setOffset(ok || first);
+  }
+}
 
 /* ขนาดตัวอักษรของป้ายเปลี่ยนตามระดับซูม: ซูม 7 → 0.75×, 9 → 0.9×, 11 → 1×, 13+ → 1.2× */
 const LABEL_SCALE = [[7, 0.75], [9, 0.9], [11, 1], [13, 1.2]];

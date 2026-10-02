@@ -55,23 +55,6 @@
   {
    "type": "Feature",
    "properties": {
-    "stn_code": "N.8B",
-    "lat": 16.00941,
-    "lng": 100.3692,
-    "label_lng": 100.3692,
-    "label_lat": 16.00941
-   },
-   "geometry": {
-    "type": "Point",
-    "coordinates": [
-     100.3692,
-     16.00941
-    ]
-   }
-  },
-  {
-   "type": "Feature",
-   "properties": {
     "stn_code": "C.2",
     "lat": 15.67059,
     "lng": 100.1094,

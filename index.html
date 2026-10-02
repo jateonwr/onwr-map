@@ -133,7 +133,7 @@
 
   <!-- ด้านบนซ้าย: โลโก้ สทนช. + เครื่องมือวัดระยะ + ปุ่มลงพื้นที่ + อยู่ในทุ่งไหน -->
   <div class="absolute safe-top left-3 right-[76px] md:right-auto md:w-[380px] flex flex-col gap-2 pointer-events-none z-10">
-    <img src="assets/onwr-logo.png" alt="สำนักงานทรัพยากรน้ำแห่งชาติ (สทนช.)"
+    <img id="onwrLogo" src="assets/onwr-logo.png" alt="สำนักงานทรัพยากรน้ำแห่งชาติ (สทนช.)"
       class="self-start w-12 h-auto mb-1 drop-shadow-[0_1px_3px_rgba(255,255,255,0.9)] select-none" draggable="false" />
     <div class="flex items-center gap-2">
       <button id="btnMeasure" aria-label="วัดระยะทาง" aria-pressed="false"
@@ -183,7 +183,7 @@
         <path d="M12 2l4 10h-8z" fill="#ea4335"/><path d="M12 22l-4-10h8z" fill="#9aa0a6"/>
       </svg>
     </button>
-    <div class="w-12 rounded-full bg-white shadow-md flex flex-col overflow-hidden">
+    <div id="zoomBox" class="w-12 rounded-full bg-white shadow-md flex flex-col overflow-hidden">
       <button id="btnZoomIn" aria-label="ซูมเข้า" class="h-12 grid place-items-center active:bg-gray-100">
         <svg class="w-6 h-6 text-gray-700" viewBox="0 0 24 24" fill="currentColor"><path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/></svg>
       </button>
@@ -264,9 +264,9 @@
   <div id="toast" class="fixed left-1/2 -translate-x-1/2 safe-bottom mb-24 z-40 bg-gray-900 text-white text-sm rounded-lg px-4 py-2.5 shadow-lg hidden max-w-[90vw] text-center"></div>
 
   <!-- เปลี่ยนเลข ?v= ทุกครั้งที่แก้ไฟล์ .js เพื่อให้มือถือโหลดไฟล์ใหม่ -->
-  <script src="app.js?v=41"></script>
-  <script src="sheet.js?v=41"></script>
-  <script src="track.js?v=41"></script>
-  <script src="measure.js?v=41"></script>
+  <script src="app.js?v=44"></script>
+  <script src="sheet.js?v=44"></script>
+  <script src="track.js?v=44"></script>
+  <script src="measure.js?v=44"></script>
 </body>
 </html>
