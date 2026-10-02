@@ -29,7 +29,7 @@ const BASEMAPS = [
 const FIELD_LABELS = {
   // ทุ่งรับน้ำ (พื้นที่ลุ่มต่ำ 10+1)
   AREA_NAME: 'ชื่อทุ่ง', PROV_NAM_T: 'จังหวัด', AMPHOE_T: 'อำเภอ', OVER_R: 'รับน้ำจาก', Basin: 'ลุ่มน้ำ',
-  STORAGE: 'พื้นที่รับน้ำ (ไร่)', DEPTH: 'ความลึกน้ำ (ม.)', Cap_MCM: 'ความจุ (ล้าน ลบ.ม.)',
+  STORAGE: 'พื้นที่รับน้ำ (ไร่)', DEPTH: 'ความลึกน้ำ (ม.)', Cap_Pot: 'ความจุศักยภาพ (ล้าน ลบ.ม.)', Cap_MCM: 'ความจุ (ล้าน ลบ.ม.)',
   Status_Now: 'ปริมาณน้ำปัจจุบัน (ล้าน ลบ.ม.)',
   // แหล่งน้ำขนาดใหญ่ / ขนาดกลาง
   name: 'ชื่อ', tambol: 'ตำบล', amphoe: 'อำเภอ', province: 'จังหวัด', storage: 'ความจุ (ล้าน ลบ.ม.)',
@@ -53,12 +53,13 @@ const OVERLAYS = [
     id: 'tung', name: 'ทุ่งรับน้ำ', url: 'data/tung.geojson', visible: true, opacity: 0.75,
     swatch: TUNG_FILL, outline: TUNG_LINE,
     titleField: 'AREA_NAME', legend: true, labels: true, isZone: true,
-    // บรรทัดใต้ชื่อทุ่ง: (ความจุ/ปริมาณน้ำปัจจุบัน/ปริมาณ÷ความจุ %)
+    // บรรทัดใต้ชื่อทุ่ง: (ความจุศักยภาพ/ความจุ/ปริมาณน้ำปัจจุบัน/ปริมาณ÷ความจุ %)
     labelExtra: p => {
-      const cap = p.Cap_MCM, now = p.Status_Now;
-      if (cap == null && now == null) return '';
+      const pot = p.Cap_Pot, cap = p.Cap_MCM, now = p.Status_Now;
+      if (pot == null && cap == null && now == null) return '';
+      const v = x => x != null ? fmt(x) : '–';
       const pct = cap > 0 && now != null ? `${Math.round(now / cap * 100)}%` : '–';
-      return `(${cap != null ? fmt(cap) : '–'}/${now != null ? fmt(now) : '–'}/${pct})`;
+      return `(${v(pot)}/${v(cap)}/${v(now)}/${pct})`;
     },
     layers: (src, op) => [
       { id: `${src}-fill`, type: 'fill', source: src,

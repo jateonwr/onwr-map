@@ -17,7 +17,8 @@ const SHEETS = [
     key: 'sheet',            // ชื่อที่ใช้เก็บค่าล่าสุดในเครื่อง
     layer: 'tung',
     url: 'https://docs.google.com/spreadsheets/d/1Z-avaBjksZ6km8dr90KO6eZ54nIBEik2FH9uavvA4O0/edit?usp=sharing',
-    fields: {                // ค่าในชั้นข้อมูล : คำที่ต้องมีในหัวคอลัมน์
+    fields: {                // ค่าในชั้นข้อมูล : คำที่ต้องมีในหัวคอลัมน์ (จับตามลำดับ)
+      Cap_Pot:    ['ศักยภาพ', 'Cap_Pot'],      // ต้องอยู่ก่อน "ความจุ" (หัวคอลัมน์มีคำว่าความจุเหมือนกัน)
       Cap_MCM:    ['ความจุ', 'Cap_MCM'],
       Status_Now: ['ปริมาณน้ำ', 'Status_Now'],
     },
