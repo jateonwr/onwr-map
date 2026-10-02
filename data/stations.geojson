@@ -102,6 +102,23 @@
      15.16384
     ]
    }
+  },
+  {
+   "type": "Feature",
+   "properties": {
+    "stn_code": "C.29B",
+    "lat": 14.11658,
+    "lng": 100.5374,
+    "label_lng": 100.5374,
+    "label_lat": 14.11658
+   },
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     100.5374,
+     14.11658
+    ]
+   }
   }
  ]
 }
