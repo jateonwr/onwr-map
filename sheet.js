@@ -203,3 +203,88 @@ for (const cfg of SHEETS) {
     if (document.visibilityState === 'visible' && Date.now() - S.fetchedAt > SHEET_COMMON.refreshMinutes * 60000) load();
   });
 }
+
+
+/* ============================================================
+ *  จุดลงพื้นที่ — ทั้งชั้นข้อมูลมาจาก Google Sheet
+ *  คอลัมน์: ชื่อ | lat | lon | (คอลัมน์อื่น ๆ แสดงในแผงข้อมูล)
+ * ============================================================ */
+
+const VISIT_SHEET = {
+  layer: 'visits',
+  url: 'https://docs.google.com/spreadsheets/d/1IsSuRMH1-xvyKkdiI-nDYWerCpmSU_5fjJMgRtVBfqc/edit?usp=sharing',
+  latHeaders: ['lat', 'ละติจูด', 'latitude'],
+  lonHeaders: ['lon', 'lng', 'long', 'ลองจิจูด', 'longitude'],
+};
+const visitState = { fetchedAt: 0, error: null, skipped: [] };
+
+async function loadVisitPoints() {
+  const url = sheetCsvUrl(VISIT_SHEET.url);
+  let headers, rows;
+  try {
+    const res = await fetch(url, { cache: 'no-store' });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const text = await res.text();
+    if (/^\s*</.test(text)) throw new Error('ได้หน้าเว็บแทน CSV');
+    rows = parseCSV(text.replace(/^\uFEFF/, '')).map(r => r.map(c => c.trim()));
+    headers = rows.shift() || [];
+    visitState.error = null;
+    visitState.fetchedAt = Date.now();
+    store.set('sheet:visits', { headers, rows, fetchedAt: visitState.fetchedAt });
+  } catch (err) {
+    console.error('Google Sheet: visits', err);
+    visitState.error = 'ดึงข้อมูลไม่สำเร็จ — ตรวจว่าแชร์ Sheet แบบ "ทุกคนที่มีลิงก์" แล้ว';
+    const cached = store.get('sheet:visits', null);
+    headers = cached ? cached.headers : [];
+    rows = cached ? cached.rows : [];
+    if (cached) visitState.fetchedAt = cached.fetchedAt;
+  }
+
+  const hs = headers.map(h => h.toLowerCase());
+  const latI = hs.findIndex(h => VISIT_SHEET.latHeaders.includes(h));
+  const lonI = hs.findIndex(h => VISIT_SHEET.lonHeaders.includes(h));
+  visitState.skipped = [];
+  const features = [];
+  for (const r of rows) {
+    if (!r.some(Boolean)) continue;
+    let lat = toNumber(r[latI]), lon = toNumber(r[lonI]);
+    if (lat != null && lon != null && Math.abs(lat) > 90) [lat, lon] = [lon, lat];   // กรอกสลับคอลัมน์
+    if (lat == null || lon == null || Math.abs(lat) > 90 || Math.abs(lon) > 180) { visitState.skipped.push(r[0] || '(ไม่มีชื่อ)'); continue; }
+    const props = { name: r[0] || '(ไม่มีชื่อ)', lat, lng: lon, label_lat: lat, label_lng: lon };
+    headers.forEach((h, i) => {
+      if (i === 0 || i === latI || i === lonI || !h || !r[i]) return;
+      props[h] = r[i];
+      FIELD_LABELS[h] = FIELD_LABELS[h] || h;   // แสดงคอลัมน์อื่น ๆ ในแผงข้อมูล
+    });
+    features.push({ type: 'Feature', properties: props, geometry: { type: 'Point', coordinates: [lon, lat] } });
+  }
+  return { type: 'FeatureCollection', features };
+}
+
+/* โหลดใหม่ระหว่างใช้งาน → อัปเดตจุด + ป้ายชื่อ */
+async function refreshVisitPoints() {
+  const o = OVERLAYS.find(x => x.id === VISIT_SHEET.layer), st = overlayState[o.id];
+  if (!map.getSource(o.id)) return;
+  const data = await loadVisitPoints();
+  data.features.forEach((f, i) => { f.id = i; });
+  st.data = data;
+  st.bounds = data.features.length ? geomBounds(data) : null;
+  map.getSource(o.id).setData(data);
+  st.labels.forEach(m => m.remove());
+  createLabels(o);
+  updateLabels();
+  renderLayerPanel();
+}
+
+layerNotes[VISIT_SHEET.layer] = () => {
+  const parts = [];
+  if (visitState.fetchedAt) parts.push(`Google Sheet: ${timeText(visitState.fetchedAt)}`);
+  if (visitState.error) parts.push(`<span class="text-red-600">${visitState.error}</span>`);
+  if (visitState.skipped.length) parts.push(`<span class="text-amber-700">พิกัดไม่ถูกต้อง (ข้าม): ${visitState.skipped.map(escapeHtml).join(', ')}</span>`);
+  return parts.length ? `<div class="text-xs text-gray-500 mt-0.5">${parts.join('<br>')}</div>` : '';
+};
+
+setInterval(() => { if (document.visibilityState === 'visible') refreshVisitPoints(); }, SHEET_COMMON.refreshMinutes * 60000);
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible' && Date.now() - visitState.fetchedAt > SHEET_COMMON.refreshMinutes * 60000) refreshVisitPoints();
+});

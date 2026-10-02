@@ -45,6 +45,11 @@ const FIELD_LABELS = {
   STREFFCODE: 'รหัสจุดตรวจวัด', EFF_KM: 'กม. ที่', Descp: 'รายละเอียด', Length_km: 'ความยาว (กม.)',
 };
 
+/* ขนาดไอคอนจุดตามระดับซูม: ซูมออก = เล็ก, ซูมเข้า = ใหญ่ */
+const ICON_SIZE_BY_ZOOM = ['interpolate', ['linear'], ['zoom'], 5, 0.35, 8, 0.6, 11, 0.9, 14, 1.2];
+const CIRCLE_RADIUS_BY_ZOOM = ['interpolate', ['linear'], ['zoom'], 5, 2.5, 8, 4, 11, 6.5, 14, 9];
+const CIRCLE_STROKE_BY_ZOOM = ['interpolate', ['linear'], ['zoom'], 5, 1, 8, 1.5, 11, 2, 14, 2.5];
+
 const TUNG_FILL = '#c7bca8';
 const TUNG_LINE = '#1e3a8a';   // ขอบทุ่งรับน้ำ: น้ำเงินเข้ม
 
@@ -101,7 +106,7 @@ const OVERLAYS = [
     layers: (src, op) => [
       { id: `${src}-icon`, type: 'symbol', source: src,
         layout: { 'icon-image': 'rect-blue', 'icon-allow-overlap': true, 'icon-ignore-placement': true,
-                  'icon-size': ['interpolate', ['linear'], ['zoom'], 6, 0.75, 12, 1.1] },
+                  'icon-size': ICON_SIZE_BY_ZOOM },
         paint: { 'icon-opacity': op } },
     ],
     opacityProps: [['icon', 'icon-opacity', 1]],
@@ -151,10 +156,25 @@ const OVERLAYS = [
     labels: true, labelClass: 'stn-label', labelMinZoom: 7.5, labelAnchor: 'left', labelOffset: [10, 0],
     layers: (src, op) => [
       { id: `${src}-circle`, type: 'circle', source: src,
-        paint: { 'circle-color': '#f97316', 'circle-opacity': op, 'circle-stroke-color': '#ffffff', 'circle-stroke-width': 2,
-                 'circle-stroke-opacity': op, 'circle-radius': ['interpolate', ['linear'], ['zoom'], 6, 5, 12, 8] } },
+        paint: { 'circle-color': '#f97316', 'circle-opacity': op, 'circle-stroke-color': '#ffffff', 'circle-stroke-width': CIRCLE_STROKE_BY_ZOOM,
+                 'circle-stroke-opacity': op, 'circle-radius': CIRCLE_RADIUS_BY_ZOOM } },
     ],
     opacityProps: [['circle', 'circle-opacity', 1], ['circle', 'circle-stroke-opacity', 1]],
+  },
+  {
+    // จุดลงพื้นที่: ข้อมูลจาก Google Sheet (ตั้งลิงก์ใน sheet.js → VISIT_SHEET)
+    id: 'visits', name: 'จุดลงพื้นที่', visible: true, opacity: 1,
+    swatch: '#dc2626', titleField: 'name',
+    loader: () => loadVisitPoints(),
+    countText: data => `${data.features.length} จุด`,
+    labels: true, labelClass: 'visit-label', labelMinZoom: 7.5, labelAnchor: 'left', labelOffset: [13, 0],
+    layers: (src, op) => [
+      { id: `${src}-icon`, type: 'symbol', source: src,
+        layout: { 'icon-image': 'star-red', 'icon-allow-overlap': true, 'icon-ignore-placement': true,
+                  'icon-size': ICON_SIZE_BY_ZOOM },
+        paint: { 'icon-opacity': op } },
+    ],
+    opacityProps: [['icon', 'icon-opacity', 1]],
   },
 ];
 
@@ -237,9 +257,29 @@ function rectIcon(fill, w = 24, h = 14, border = 2.5) {
   return { image: g.getImageData(0, 0, w * r, h * r), pixelRatio: r };
 }
 
+/* ไอคอนดาว 5 แฉก ขอบขาว */
+function starIcon(fill, size = 26) {
+  const r = 2, c = document.createElement('canvas');
+  c.width = c.height = size * r;
+  const g = c.getContext('2d');
+  g.scale(r, r);
+  const cx = size / 2, cy = size / 2 + 1, R = size / 2 - 2, rIn = R * 0.45;
+  g.beginPath();
+  for (let i = 0; i < 10; i++) {
+    const a = -Math.PI / 2 + i * Math.PI / 5, rr = i % 2 ? rIn : R;
+    g[i ? 'lineTo' : 'moveTo'](cx + rr * Math.cos(a), cy + rr * Math.sin(a));
+  }
+  g.closePath();
+  g.lineJoin = 'round'; g.lineWidth = 2.5; g.strokeStyle = '#ffffff'; g.stroke();
+  g.fillStyle = fill; g.fill();
+  return { image: g.getImageData(0, 0, size * r, size * r), pixelRatio: r };
+}
+
 map.on('load', async () => {
   const icon = rectIcon('#0284c7');
   map.addImage('rect-blue', icon.image, { pixelRatio: icon.pixelRatio });
+  const star = starIcon('#dc2626');
+  map.addImage('star-red', star.image, { pixelRatio: star.pixelRatio });
   // แหล่งข้อมูลตำแหน่งผู้ใช้ (วงความแม่นยำ) + feature ที่ถูกเลือก
   map.addSource('me-accuracy', { type: 'geojson', data: emptyFC() });
   map.addSource('selected', { type: 'geojson', data: emptyFC() });
@@ -247,9 +287,13 @@ map.on('load', async () => {
   await Promise.all(OVERLAYS.map(async o => {
     const st = overlayState[o.id];
     try {
-      const res = await fetch(o.url, { cache: 'no-cache' });   // เช็กกับ server ทุกครั้ง กันใช้ไฟล์เก่าที่ค้างในเครื่อง
-      if (!res.ok) throw new Error(res.status);
-      const data = await res.json();
+      let data;
+      if (o.loader) data = await o.loader();                     // ข้อมูลจากที่อื่น (เช่น Google Sheet)
+      else {
+        const res = await fetch(o.url, { cache: 'no-cache' });   // เช็กกับ server ทุกครั้ง กันใช้ไฟล์เก่าที่ค้างในเครื่อง
+        if (!res.ok) throw new Error(res.status);
+        data = await res.json();
+      }
       if (o.enrich) await o.enrich(data);
       st.data = data;
     } catch (err) {
@@ -424,7 +468,7 @@ $('basemapList').addEventListener('click', e => {
   activeBase = btn.dataset.base;
   store.set('basemap', activeBase);
   BASEMAPS.forEach(b => map.setLayoutProperty(`base-${b.id}`, 'visibility', b.id === activeBase ? 'visible' : 'none'));
-  document.querySelectorAll('.tung-label, .water-label, .stn-label, .river-label, .prov-label').forEach(el => {
+  document.querySelectorAll('.tung-label, .water-label, .stn-label, .river-label, .prov-label, .visit-label').forEach(el => {
     el.style.color = activeBase === 'satellite' ? '#fff' : '';
     el.style.textShadow = activeBase === 'satellite' ? '0 0 3px #000, 0 0 3px #000' : '';
   });
@@ -550,7 +594,7 @@ function showInfo(o, f) {
   $('infoSwatch').style.cssText = swatchStyle(o);
   $('infoBody').innerHTML = Object.entries(p)
     .filter(([k, v]) => FIELD_LABELS[k] && k !== o.titleField && v !== null && v !== '')
-    .map(([k, v]) => `<div class="flex gap-4 py-2.5"><dt class="w-32 flex-none text-gray-500">${FIELD_LABELS[k]}</dt><dd class="flex-1 min-w-0 break-words">${escapeHtml(fmt(v))}</dd></div>`)
+    .map(([k, v]) => `<div class="flex gap-4 py-2.5"><dt class="w-32 flex-none text-gray-500">${FIELD_LABELS[k]}</dt><dd class="flex-1 min-w-0 break-words">${escapeHtml((k === 'lat' || k === 'lng') && typeof v === 'number' ? v.toFixed(5) : fmt(v))}</dd></div>`)
     .join('') + infoExtras.map(fn => fn(o, f) || '').join('');
   map.getSource('selected').setData({ type: 'FeatureCollection', features: [f] });
   closeSheet('layerSheet');
