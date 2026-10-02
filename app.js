@@ -329,6 +329,26 @@ function updateLabels() {
 }
 map.on('moveend', updateLabels);
 
+/* ขนาดตัวอักษรของป้ายเปลี่ยนตามระดับซูม: ซูม 7 → 0.75×, 9 → 0.9×, 11 → 1×, 13+ → 1.2× */
+const LABEL_SCALE = [[7, 0.75], [9, 0.9], [11, 1], [13, 1.2]];
+function labelScale(z) {
+  if (z <= LABEL_SCALE[0][0]) return LABEL_SCALE[0][1];
+  for (let i = 1; i < LABEL_SCALE.length; i++) {
+    const [z1, s1] = LABEL_SCALE[i], [z0, s0] = LABEL_SCALE[i - 1];
+    if (z <= z1) return s0 + (s1 - s0) * (z - z0) / (z1 - z0);
+  }
+  return LABEL_SCALE[LABEL_SCALE.length - 1][1];
+}
+let lastLabelScale = null;
+function applyLabelScale() {
+  const ls = Math.round(labelScale(map.getZoom()) * 100) / 100;
+  if (ls === lastLabelScale) return;
+  lastLabelScale = ls;
+  map.getContainer().style.setProperty('--ls', ls);
+}
+map.on('zoom', applyLabelScale);
+applyLabelScale();
+
 /* ============================================================
  *  แผงชั้นข้อมูล
  * ============================================================ */

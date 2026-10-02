@@ -43,16 +43,17 @@
 
     /* ป้ายชื่อทุ่ง */
     .tung-label {
-      font: 600 16px/1.2 "Noto Sans Thai", system-ui, sans-serif; color: #1f2937; white-space: nowrap;
+      font: 600 calc(16px * var(--ls, 1))/1.2 "Noto Sans Thai", system-ui, sans-serif; color: #1f2937; white-space: nowrap;
       text-shadow: 0 0 3px #fff, 0 0 3px #fff, 0 0 3px #fff; pointer-events: none; text-align: center;
     }
+    /* --ls = ตัวคูณขนาดป้ายตามระดับซูม (ตั้งค่าใน app.js: labelScale) */
     /* ขอบขาวรอบตัวอักษร (mask) — เงา 8 ทิศ ให้ขอบคมทุกเบราว์เซอร์ */
     .water-label {
-      font: 700 13px/1.2 "Noto Sans Thai", system-ui, sans-serif; color: #0c4a6e; white-space: nowrap;
+      font: 700 calc(13px * var(--ls, 1))/1.2 "Noto Sans Thai", system-ui, sans-serif; color: #0c4a6e; white-space: nowrap;
       pointer-events: none; text-align: center;
     }
     .river-label {
-      font: 600 14px/1 "Noto Sans Thai", system-ui, sans-serif; color: #1d4ed8; white-space: nowrap;
+      font: 600 calc(14px * var(--ls, 1))/1 "Noto Sans Thai", system-ui, sans-serif; color: #1d4ed8; white-space: nowrap;
       pointer-events: none;
     }
     .water-label, .river-label {
@@ -60,19 +61,19 @@
                    2px 2px 0 #fff, 0 2px 0 #fff, -2px 2px 0 #fff, -2px 0 0 #fff, 0 0 4px #fff;
     }
     .water-label .v { display: none; }
-    .water-label .c { font-size: 12px; font-weight: 600; margin-top: 1px; }
+    .water-label .c { font-size: calc(12px * var(--ls, 1)); font-weight: 600; margin-top: 1px; }
     .stn-label {
-      font: 700 13px/1.2 system-ui, sans-serif; color: #9a3412; white-space: nowrap;
+      font: 700 calc(13px * var(--ls, 1))/1.2 system-ui, sans-serif; color: #9a3412; white-space: nowrap;
       text-shadow: 0 0 3px #fff, 0 0 3px #fff, 0 0 3px #fff; pointer-events: none;
     }
     .stn-label .v { display: none; }
-    .tung-label .c { font-size: 13px; font-weight: 600; margin-top: 1px; }
+    .tung-label .c { font-size: calc(13px * var(--ls, 1)); font-weight: 600; margin-top: 1px; }
     .tung-label .c:empty, .water-label .c:empty, .stn-label .c:empty { display: none; }
     /* ค่าจาก Google Sheet ใต้ชื่อทุ่ง */
     .tung-label .v {
       display: inline-block; margin-top: 3px; padding: 2px 8px; border-radius: 8px;
       background: rgba(255,255,255,.94); color: #1f2937; text-shadow: none;
-      font-size: 13px; font-weight: 600; box-shadow: 0 1px 3px rgba(0,0,0,.25);
+      font-size: calc(13px * var(--ls, 1)); font-weight: 600; box-shadow: 0 1px 3px rgba(0,0,0,.25);
     }
     .tung-label .v:empty { display: none; }
     .tung-label .v .k { color: #6b7280; font-weight: 400; }
@@ -239,9 +240,9 @@
   <div id="toast" class="fixed left-1/2 -translate-x-1/2 safe-bottom mb-24 z-40 bg-gray-900 text-white text-sm rounded-lg px-4 py-2.5 shadow-lg hidden max-w-[90vw] text-center"></div>
 
   <!-- เปลี่ยนเลข ?v= ทุกครั้งที่แก้ไฟล์ .js เพื่อให้มือถือโหลดไฟล์ใหม่ -->
-  <script src="app.js?v=23"></script>
-  <script src="sheet.js?v=23"></script>
-  <script src="track.js?v=23"></script>
-  <script src="measure.js?v=23"></script>
+  <script src="app.js?v=24"></script>
+  <script src="sheet.js?v=24"></script>
+  <script src="track.js?v=24"></script>
+  <script src="measure.js?v=24"></script>
 </body>
 </html>
