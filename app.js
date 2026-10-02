@@ -91,13 +91,14 @@ const OVERLAYS = [
     // แหล่งน้ำอื่น ๆ (จุด) — เพิ่มจุดได้ใน data/water-other.geojson
     id: 'water-other', name: 'แหล่งน้ำอื่น ๆ', url: 'data/water-other.geojson', visible: true, opacity: 1,
     swatch: '#0284c7', titleField: 'name',
-    labels: true, labelClass: 'water-label', labelMinZoom: 8, labelAnchor: 'left', labelOffset: [11, 0],
+    labels: true, labelClass: 'water-label', labelMinZoom: 8, labelAnchor: 'left', labelOffset: [15, 0],
     layers: (src, op) => [
-      { id: `${src}-circle`, type: 'circle', source: src,
-        paint: { 'circle-color': '#0284c7', 'circle-opacity': op, 'circle-stroke-color': '#ffffff', 'circle-stroke-width': 2.5,
-                 'circle-stroke-opacity': op, 'circle-radius': ['interpolate', ['linear'], ['zoom'], 6, 5, 12, 8] } },
+      { id: `${src}-icon`, type: 'symbol', source: src,
+        layout: { 'icon-image': 'rect-blue', 'icon-allow-overlap': true, 'icon-ignore-placement': true,
+                  'icon-size': ['interpolate', ['linear'], ['zoom'], 6, 0.75, 12, 1.1] },
+        paint: { 'icon-opacity': op } },
     ],
-    opacityProps: [['circle', 'circle-opacity', 1], ['circle', 'circle-stroke-opacity', 1]],
+    opacityProps: [['icon', 'icon-opacity', 1]],
   },
   {
     id: 'streams-sub', name: 'ลำน้ำสาขา', url: 'data/streams-sub.geojson', visible: true, opacity: 1,
@@ -149,6 +150,7 @@ const onMapReady = [];      // fn()            — หลังโหลดช�
 const fixListeners = [];    // fn(fix)         — ทุกครั้งที่ได้ตำแหน่ง GPS ใหม่
 const infoExtras = [];      // fn(o, f) → html — แถวเพิ่มเติมในแผงข้อมูล
 const layerNotes = {};      // [layerId]: () → html — ข้อความใต้ชื่อชั้นข้อมูล
+const clickInterceptors = []; // fn(e) → true ถ้าจัดการการแตะแผนที่เองแล้ว (เช่น เครื่องมือวัดระยะ)
 const store = {
   get(k, d) { try { const v = localStorage.getItem('wm2:' + k); return v == null ? d : JSON.parse(v); } catch { return d; } },
   set(k, v) { try { localStorage.setItem('wm2:' + k, JSON.stringify(v)); } catch {} },
@@ -201,7 +203,20 @@ function geomBounds(fc) {
   return [[w, s], [e, n]];
 }
 
+/* ไอคอนสี่เหลี่ยมผืนผ้า (วาดด้วย canvas) */
+function rectIcon(fill, w = 24, h = 14, border = 2.5) {
+  const r = 2, c = document.createElement('canvas');
+  c.width = w * r; c.height = h * r;
+  const g = c.getContext('2d');
+  g.scale(r, r);
+  g.fillStyle = '#ffffff'; g.fillRect(0, 0, w, h);
+  g.fillStyle = fill; g.fillRect(border, border, w - border * 2, h - border * 2);
+  return { image: g.getImageData(0, 0, w * r, h * r), pixelRatio: r };
+}
+
 map.on('load', async () => {
+  const icon = rectIcon('#0284c7');
+  map.addImage('rect-blue', icon.image, { pixelRatio: icon.pixelRatio });
   // แหล่งข้อมูลตำแหน่งผู้ใช้ (วงความแม่นยำ) + feature ที่ถูกเลือก
   map.addSource('me-accuracy', { type: 'geojson', data: emptyFC() });
   map.addSource('selected', { type: 'geojson', data: emptyFC() });
@@ -461,6 +476,7 @@ const clickableLayers = () => OVERLAYS.flatMap(o => o.layers(o.id, 1).map(l => l
   .filter(id => map.getLayer(id) && map.getLayoutProperty(id, 'visibility') !== 'none' && !/-(casing|label2?)$/.test(id));
 
 map.on('click', e => {
+  if (clickInterceptors.some(fn => fn(e))) return;
   const pad = 10;
   const hits = map.queryRenderedFeatures(
     [[e.point.x - pad, e.point.y - pad], [e.point.x + pad, e.point.y + pad]], { layers: clickableLayers() });

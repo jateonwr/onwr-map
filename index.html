@@ -77,6 +77,18 @@
     .tung-label .v .k { color: #6b7280; font-weight: 400; }
     .tung-label .v .sep { color: #9ca3af; }
 
+    /* เครื่องมือวัดระยะ */
+    .m-vertex { width: 26px; height: 26px; display: grid; place-items: center; cursor: grab; touch-action: none; }
+    .m-vertex::after { content: ""; width: 14px; height: 14px; border-radius: 50%; background: #fff; border: 3px solid var(--c); box-shadow: 0 1px 3px rgba(0,0,0,.35); }
+    .m-vertex.last::after { background: var(--c); border-color: #fff; }
+    .m-mid { width: 24px; height: 24px; display: grid; place-items: center; cursor: grab; touch-action: none; }
+    .m-mid::after { content: ""; width: 10px; height: 10px; border-radius: 50%; background: #fff; border: 2px solid var(--c); opacity: .8; }
+    .m-label {
+      font: 600 12px/1 "Noto Sans Thai", system-ui, sans-serif; color: #111827; white-space: nowrap; pointer-events: none;
+      background: #fff; border: 1.5px solid var(--c); border-radius: 6px; padding: 3px 6px; box-shadow: 0 1px 3px rgba(0,0,0,.2);
+    }
+    #btnMeasure[aria-pressed="true"] { background: #1a73e8; color: #fff; }
+
     /* สวิตช์เปิด/ปิด */
     .switch { position: relative; width: 44px; height: 26px; flex: none; }
     .switch input { position: absolute; opacity: 0; inset: 0; margin: 0; cursor: pointer; z-index: 1; }
@@ -100,11 +112,35 @@
 <body class="font-sans bg-gray-100 text-gray-900 select-none">
   <div id="map"></div>
 
-  <!-- ด้านบน: อยู่ในทุ่งไหน -->
-  <div class="absolute safe-top left-3 right-[76px] flex flex-col pointer-events-none z-10">
-    <div id="zoneChip" class="hidden pointer-events-auto self-start items-center gap-2 bg-white/95 backdrop-blur rounded-full shadow-md px-3 h-9 text-sm">
-      <span id="zoneSwatch" class="w-3 h-3 rounded-sm flex-none"></span>
-      <span>คุณอยู่ใน <b id="zoneName"></b></span>
+  <!-- ด้านบนซ้าย: เครื่องมือวัดระยะ + อยู่ในทุ่งไหน -->
+  <div class="absolute safe-top left-3 right-[76px] md:right-auto md:w-[380px] flex flex-col gap-2 pointer-events-none z-10">
+    <div class="flex items-center gap-2">
+      <button id="btnMeasure" aria-label="วัดระยะทาง" aria-pressed="false"
+        class="pointer-events-auto w-12 h-12 flex-none rounded-full bg-white shadow-md grid place-items-center active:bg-gray-100">
+        <svg class="w-6 h-6" viewBox="0 0 24 24" fill="currentColor"><path d="M21 6H3c-1.1 0-2 .9-2 2v8c0 1.1.9 2 2 2h18c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2zm0 10H3V8h2v4h2V8h2v4h2V8h2v4h2V8h2v4h2V8h2v8z"/></svg>
+      </button>
+      <div id="zoneChip" class="hidden pointer-events-auto min-w-0 items-center gap-2 bg-white/95 backdrop-blur rounded-full shadow-md px-3 h-9 text-sm">
+        <span id="zoneSwatch" class="w-3 h-3 rounded-sm flex-none"></span>
+        <span class="truncate">คุณอยู่ใน <b id="zoneName"></b></span>
+      </div>
+    </div>
+
+    <!-- แผงวัดระยะ -->
+    <div id="measurePanel" class="hidden pointer-events-auto bg-white rounded-2xl shadow-lg p-3">
+      <div class="flex items-center gap-2">
+        <span id="measureSwatch" class="w-3 h-3 rounded-full flex-none"></span>
+        <div class="flex-1 min-w-0">
+          <div id="measureTotal" class="text-xl font-semibold tabular-nums leading-tight">0 ม.</div>
+          <div id="measureHint" class="text-xs text-gray-500 leading-tight truncate">แตะแผนที่เพื่อเพิ่มจุด</div>
+        </div>
+        <button id="btnMeasureUndo" aria-label="ย้อนจุดล่าสุด" class="w-10 h-10 rounded-full grid place-items-center text-gray-700 active:bg-gray-100">
+          <svg class="w-5 h-5" viewBox="0 0 24 24" fill="currentColor"><path d="M12.5 8c-2.65 0-5.05.99-6.9 2.6L2 7v9h9l-3.62-3.62c1.39-1.16 3.16-1.88 5.12-1.88 3.54 0 6.55 2.31 7.6 5.5l2.37-.78C21.08 11.03 17.15 8 12.5 8z"/></svg>
+        </button>
+        <button id="btnMeasureNew" aria-label="เริ่มเส้นใหม่" class="h-10 px-3 rounded-full bg-blue-600 text-white text-sm font-medium flex items-center gap-1 active:bg-blue-700">
+          <svg class="w-4 h-4" viewBox="0 0 24 24" fill="currentColor"><path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/></svg>เส้นใหม่
+        </button>
+      </div>
+      <div id="measureList" class="flex flex-wrap gap-1.5 mt-2 empty:hidden"></div>
     </div>
   </div>
 
@@ -199,8 +235,9 @@
   <div id="toast" class="fixed left-1/2 -translate-x-1/2 safe-bottom mb-24 z-40 bg-gray-900 text-white text-sm rounded-lg px-4 py-2.5 shadow-lg hidden max-w-[90vw] text-center"></div>
 
   <!-- เปลี่ยนเลข ?v= ทุกครั้งที่แก้ไฟล์ .js เพื่อให้มือถือโหลดไฟล์ใหม่ -->
-  <script src="app.js?v=13"></script>
-  <script src="sheet.js?v=13"></script>
-  <script src="track.js?v=13"></script>
+  <script src="app.js?v=14"></script>
+  <script src="sheet.js?v=14"></script>
+  <script src="track.js?v=14"></script>
+  <script src="measure.js?v=14"></script>
 </body>
 </html>
