@@ -1,0 +1,190 @@
+<!doctype html>
+<html lang="th">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+  <meta name="theme-color" content="#ffffff" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <title>แผนที่ลุ่มน้ำ</title>
+
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+Thai:wght@400;500;600;700&display=swap" />
+  <link rel="stylesheet" href="https://unpkg.com/maplibre-gl@5/dist/maplibre-gl.css" />
+  <script src="https://unpkg.com/maplibre-gl@5/dist/maplibre-gl.js"></script>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = { theme: { extend: { fontFamily: { sans: ['"Noto Sans Thai"', 'system-ui', 'sans-serif'] } } } };
+  </script>
+
+  <style>
+    html, body { height: 100%; margin: 0; overflow: hidden; overscroll-behavior: none; -webkit-tap-highlight-color: transparent; }
+    #map { position: absolute; inset: 0; }
+    .safe-top    { top:    calc(env(safe-area-inset-top) + 12px); }
+    .safe-bottom { bottom: calc(env(safe-area-inset-bottom) + 16px); }
+    .safe-pb     { padding-bottom: calc(env(safe-area-inset-bottom) + 16px); }
+
+    /* ── ตัวตำแหน่งผู้ใช้ (จุดสีฟ้าแบบ Google Maps) ── */
+    .me { width: 88px; height: 88px; position: relative; pointer-events: none; }
+    .me .cone { position: absolute; inset: 0; opacity: 0; transition: opacity .3s; }
+    .me.has-heading .cone { opacity: 1; }
+    .me .dot {
+      position: absolute; left: 50%; top: 50%; width: 20px; height: 20px; margin: -10px 0 0 -10px;
+      border-radius: 50%; background: #1a73e8; border: 3px solid #fff; box-shadow: 0 1px 4px rgba(0,0,0,.35);
+    }
+    .me .pulse {
+      position: absolute; left: 50%; top: 50%; width: 20px; height: 20px; margin: -10px 0 0 -10px;
+      border-radius: 50%; background: rgba(26,115,232,.35); animation: pulse 2s ease-out infinite;
+    }
+    .me.stale .dot { background: #9aa0a6; }
+    .me.stale .pulse { display: none; }
+    @keyframes pulse { from { transform: scale(1); opacity: 1; } to { transform: scale(3.2); opacity: 0; } }
+
+    /* ป้ายชื่อทุ่ง */
+    .tung-label {
+      font: 600 16px/1.2 "Noto Sans Thai", system-ui, sans-serif; color: #1f2937; white-space: nowrap;
+      text-shadow: 0 0 3px #fff, 0 0 3px #fff, 0 0 3px #fff; pointer-events: none; text-align: center;
+    }
+    /* ค่าจาก Google Sheet ใต้ชื่อทุ่ง */
+    .tung-label .v {
+      display: inline-block; margin-top: 3px; padding: 2px 8px; border-radius: 8px;
+      background: rgba(255,255,255,.94); color: #1f2937; text-shadow: none;
+      font-size: 13px; font-weight: 600; box-shadow: 0 1px 3px rgba(0,0,0,.25);
+    }
+    .tung-label .v:empty { display: none; }
+    .tung-label .v .k { color: #6b7280; font-weight: 400; }
+    .tung-label .v .sep { color: #9ca3af; }
+
+    /* สวิตช์เปิด/ปิด */
+    .switch { position: relative; width: 44px; height: 26px; flex: none; }
+    .switch input { position: absolute; opacity: 0; inset: 0; margin: 0; cursor: pointer; z-index: 1; }
+    .switch span { position: absolute; inset: 0; border-radius: 999px; background: #d1d5db; transition: background .2s; }
+    .switch span::after { content: ""; position: absolute; left: 3px; top: 3px; width: 20px; height: 20px; border-radius: 50%; background: #fff; box-shadow: 0 1px 2px rgba(0,0,0,.3); transition: transform .2s; }
+    .switch input:checked + span { background: #1a73e8; }
+    .switch input:checked + span::after { transform: translateX(18px); }
+    .switch input:focus-visible + span { outline: 2px solid #1a73e8; outline-offset: 2px; }
+
+    /* แผงด้านล่าง (มือถือ) ↔ แผงด้านข้าง (แท็บเล็ต) */
+    .sheet { transition: transform .28s cubic-bezier(.2,.8,.2,1); }
+    .sheet.closed { transform: translateY(110%); }
+    @media (min-width: 768px) { .sheet.closed { transform: translateX(-110%); } }
+
+    .maplibregl-ctrl-bottom-left  { bottom: env(safe-area-inset-bottom); }
+    .maplibregl-ctrl-bottom-right { bottom: env(safe-area-inset-bottom); }
+    .maplibregl-ctrl-attrib { font-size: 10px; }
+    input[type=range] { accent-color: #1a73e8; }
+  </style>
+</head>
+<body class="font-sans bg-gray-100 text-gray-900 select-none">
+  <div id="map"></div>
+
+  <!-- แถบด้านบน: สถานะ / อยู่ในทุ่งไหน -->
+  <div class="absolute safe-top left-3 right-3 md:right-auto md:max-w-sm flex flex-col gap-2 pointer-events-none z-10">
+    <div class="pointer-events-auto flex items-center gap-2 bg-white/95 backdrop-blur rounded-full shadow-md pl-4 pr-2 h-12">
+      <svg class="w-5 h-5 text-blue-600 flex-none" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C8.1 2 5 5.1 5 9c0 5.2 7 13 7 13s7-7.8 7-13c0-3.9-3.1-7-7-7zm0 9.5a2.5 2.5 0 110-5 2.5 2.5 0 010 5z"/></svg>
+      <div class="flex-1 min-w-0">
+        <div class="text-[15px] font-semibold leading-tight truncate">แผนที่ลุ่มน้ำ</div>
+        <div id="gpsStatus" class="text-xs text-gray-500 leading-tight truncate">แตะปุ่มตำแหน่งเพื่อเริ่มติดตาม</div>
+      </div>
+    </div>
+    <div id="zoneChip" class="hidden pointer-events-auto self-start items-center gap-2 bg-white/95 backdrop-blur rounded-full shadow-md px-3 h-9 text-sm">
+      <span id="zoneSwatch" class="w-3 h-3 rounded-sm flex-none"></span>
+      <span>คุณอยู่ใน <b id="zoneName"></b></span>
+    </div>
+  </div>
+
+  <!-- ปุ่มด้านขวา -->
+  <div class="absolute right-3 safe-top flex flex-col gap-3 z-10 mt-[60px] md:mt-0">
+    <button id="btnLayers" aria-label="ชั้นข้อมูล" class="w-12 h-12 rounded-full bg-white shadow-md grid place-items-center active:bg-gray-100">
+      <svg class="w-6 h-6 text-gray-700" viewBox="0 0 24 24" fill="currentColor"><path d="M11.99 18.54l-7.37-5.73L3 14.07l9 7 9-7-1.63-1.27-7.38 5.74zM12 16l7.36-5.73L21 9l-9-7-9 7 1.63 1.27L12 16z"/></svg>
+    </button>
+    <button id="btnCompass" aria-label="หันทิศเหนือ" class="w-12 h-12 rounded-full bg-white shadow-md grid place-items-center active:bg-gray-100 transition-opacity">
+      <svg id="compassNeedle" class="w-7 h-7" viewBox="0 0 24 24">
+        <path d="M12 2l4 10h-8z" fill="#ea4335"/><path d="M12 22l-4-10h8z" fill="#9aa0a6"/>
+      </svg>
+    </button>
+    <div class="w-12 rounded-full bg-white shadow-md flex flex-col overflow-hidden">
+      <button id="btnZoomIn" aria-label="ซูมเข้า" class="h-12 grid place-items-center active:bg-gray-100">
+        <svg class="w-6 h-6 text-gray-700" viewBox="0 0 24 24" fill="currentColor"><path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/></svg>
+      </button>
+      <div class="h-px mx-2 bg-gray-200"></div>
+      <button id="btnZoomOut" aria-label="ซูมออก" class="h-12 grid place-items-center active:bg-gray-100">
+        <svg class="w-6 h-6 text-gray-700" viewBox="0 0 24 24" fill="currentColor"><path d="M19 13H5v-2h14v2z"/></svg>
+      </button>
+    </div>
+  </div>
+
+  <!-- ปุ่มเริ่มบันทึกเส้นทาง -->
+  <button id="btnRecord" aria-label="บันทึกเส้นทาง"
+    class="absolute right-4 safe-bottom z-10 w-12 h-12 rounded-full bg-white shadow-lg grid place-items-center active:bg-gray-100 mb-[92px]">
+    <span class="w-4 h-4 rounded-full bg-red-600 ring-4 ring-red-100"></span>
+  </button>
+
+  <!-- แถบควบคุมขณะบันทึก -->
+  <div id="recBar" class="hidden absolute left-3 right-[84px] md:right-auto md:w-[360px] safe-bottom mb-6 z-10 h-14 rounded-full bg-white shadow-lg items-center gap-2 pl-4 pr-1.5">
+    <span id="recDot" class="w-3 h-3 rounded-full flex-none bg-red-600 animate-pulse"></span>
+    <div class="flex-1 min-w-0 leading-tight">
+      <div id="recTime" class="font-semibold tabular-nums truncate">00:00:00</div>
+      <div id="recDist" class="text-xs text-gray-500 tabular-nums truncate">0.00 กม.</div>
+    </div>
+    <button id="btnRecPause" aria-label="พักการบันทึก" class="w-11 h-11 rounded-full grid place-items-center bg-gray-100 text-gray-700 active:bg-gray-200"></button>
+    <button id="btnRecStop" aria-label="หยุดบันทึก" class="w-11 h-11 rounded-full grid place-items-center bg-red-600 text-white active:bg-red-700">
+      <svg class="w-5 h-5" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="6" width="12" height="12" rx="1.5"/></svg>
+    </button>
+  </div>
+
+  <!-- ปุ่มติดตามตำแหน่ง -->
+  <button id="btnLocate" aria-label="ตำแหน่งของฉัน"
+    class="absolute right-3 safe-bottom z-10 w-14 h-14 rounded-full bg-white shadow-lg grid place-items-center active:bg-gray-100 mb-6">
+    <svg id="icoLocate" class="w-7 h-7 text-gray-600" viewBox="0 0 24 24" fill="currentColor"></svg>
+  </button>
+
+  <!-- แผงชั้นข้อมูล -->
+  <aside id="layerSheet"
+    class="sheet closed fixed z-30 bg-white shadow-2xl flex flex-col
+           left-0 right-0 bottom-0 max-h-[78dvh] rounded-t-2xl
+           md:top-0 md:bottom-0 md:right-auto md:w-[360px] md:max-h-none md:rounded-none md:rounded-r-2xl">
+    <div class="md:hidden pt-2 pb-1 grid place-items-center"><div class="w-10 h-1.5 rounded-full bg-gray-300"></div></div>
+    <div class="flex items-center justify-between px-5 pt-2 md:pt-[calc(env(safe-area-inset-top)+16px)] pb-2">
+      <h2 class="text-lg font-semibold">ชั้นข้อมูล</h2>
+      <button data-close aria-label="ปิด" class="w-10 h-10 -mr-2 rounded-full grid place-items-center active:bg-gray-100">
+        <svg class="w-6 h-6 text-gray-600" viewBox="0 0 24 24" fill="currentColor"><path d="M19 6.4L17.6 5 12 10.6 6.4 5 5 6.4 10.6 12 5 17.6 6.4 19 12 13.4 17.6 19 19 17.6 13.4 12z"/></svg>
+      </button>
+    </div>
+    <div class="overflow-y-auto px-5 safe-pb">
+      <div class="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">แผนที่ฐาน</div>
+      <div id="basemapList" class="grid grid-cols-3 gap-3 mb-6"></div>
+      <div class="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">ข้อมูลซ้อนทับ</div>
+      <div id="overlayList" class="flex flex-col gap-3"></div>
+      <div class="text-xs font-semibold text-gray-500 uppercase tracking-wide mt-6 mb-2">เส้นทางที่บันทึก</div>
+      <div id="trackList" class="flex flex-col gap-2"></div>
+    </div>
+  </aside>
+
+  <!-- แผงข้อมูลเมื่อแตะ feature -->
+  <aside id="infoSheet"
+    class="sheet closed fixed z-20 bg-white shadow-2xl flex flex-col
+           left-0 right-0 bottom-0 max-h-[60dvh] rounded-t-2xl
+           md:left-3 md:right-auto md:bottom-3 md:w-[360px] md:rounded-2xl">
+    <div class="md:hidden pt-2 pb-1 grid place-items-center"><div class="w-10 h-1.5 rounded-full bg-gray-300"></div></div>
+    <div class="flex items-start gap-3 px-5 pt-2 pb-2">
+      <span id="infoSwatch" class="mt-1.5 w-3.5 h-3.5 rounded flex-none"></span>
+      <div class="flex-1 min-w-0">
+        <div id="infoTitle" class="text-lg font-semibold leading-snug"></div>
+        <div id="infoLayer" class="text-sm text-gray-500"></div>
+      </div>
+      <button data-close aria-label="ปิด" class="w-10 h-10 -mr-2 -mt-1 rounded-full grid place-items-center active:bg-gray-100">
+        <svg class="w-6 h-6 text-gray-600" viewBox="0 0 24 24" fill="currentColor"><path d="M19 6.4L17.6 5 12 10.6 6.4 5 5 6.4 10.6 12 5 17.6 6.4 19 12 13.4 17.6 19 19 17.6 13.4 12z"/></svg>
+      </button>
+    </div>
+    <dl id="infoBody" class="overflow-y-auto px-5 safe-pb text-sm divide-y divide-gray-100"></dl>
+  </aside>
+
+  <div id="backdrop" class="fixed inset-0 z-20 bg-black/20 hidden md:!hidden"></div>
+  <div id="toast" class="fixed left-1/2 -translate-x-1/2 safe-bottom mb-24 z-40 bg-gray-900 text-white text-sm rounded-lg px-4 py-2.5 shadow-lg hidden max-w-[90vw] text-center"></div>
+
+  <script src="app.js"></script>
+  <script src="sheet.js"></script>
+  <script src="track.js"></script>
+</body>
+</html>
