@@ -24,7 +24,7 @@ const SHEETS = [
   },
   {
     key: 'sheet:dam',
-    layer: 'water-l',        // แหล่งน้ำขนาดใหญ่ — ค่าตั้งต้นมาจาก API กรมชลประทาน (data/dam-api.json)
+    layer: 'water-l',        // แหล่งน้ำขนาดใหญ่ (เขื่อน)
     url: '',                 // ← วางลิงก์ Google Sheet ของเขื่อนที่นี่
     fields: {
       dam_percent_storage: ['%', 'เปอร์เซ็นต์', 'dam_percent_storage'],   // ต้องอยู่ก่อน "ปริมาณน้ำ"

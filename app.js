@@ -37,7 +37,7 @@ const FIELD_LABELS = {
   // สถานี
   stn_code: 'รหัสสถานี', lat: 'ละติจูด', lng: 'ลองจิจูด',
   dam_storage: 'ความจุที่ระดับเก็บกัก (ล้าน ลบ.ม.)', dam_volume: 'ปริมาณน้ำในอ่าง (ล้าน ลบ.ม.)',
-  dam_percent_storage: 'ปริมาณน้ำ (% ความจุ)', dam_date: 'ข้อมูลวันที่',
+  dam_percent_storage: 'ปริมาณน้ำ (% ความจุ)',
   // ลำน้ำ
   STREAM_ID: 'รหัสลำน้ำ', STREAM_NAM: 'ชื่อลำน้ำ', LOCAL_NAME: 'ชื่อท้องถิ่น',
   Hy_use_des: 'ลักษณะทางน้ำ', STRCLAS_DE: 'ชั้นลำน้ำ', SHAPE_Leng: 'ความยาว (กม.)',
@@ -82,20 +82,6 @@ const OVERLAYS = [
     id: 'water-l', name: 'แหล่งน้ำขนาดใหญ่', url: 'data/water-l.geojson', visible: true, opacity: 0.7,
     swatch: '#38bdf8', outline: '#0369a1', titleField: 'name',
     labels: true, labelClass: 'water-label', labelMinZoom: 9,
-    // ข้อมูลเขื่อนจาก API กรมชลประทาน (GitHub Actions ดึงมาเก็บทุกชั่วโมง → data/dam-api.json)
-    enrich: async data => {
-      const api = await fetch('data/dam-api.json', { cache: 'no-cache' }).then(r => r.json()).catch(() => null);
-      if (!api || !Array.isArray(api.data)) return;
-      const byName = new Map(api.data.map(d => [normName(d.name), d]));
-      for (const f of data.features) {
-        const d = byName.get(normName(f.properties.name));
-        if (!d) continue;
-        Object.assign(f.properties, {
-          dam_storage: d.dam_storage, dam_volume: d.dam_volume,
-          dam_percent_storage: d.dam_percent_storage, dam_date: d.date,
-        });
-      }
-    },
     // บรรทัดใต้ชื่อเขื่อน: (ความจุ/ปริมาณน้ำ/%)
     labelExtra: p => p.dam_storage == null && p.dam_volume == null ? ''
       : `(${p.dam_storage != null ? fmt(p.dam_storage) : '–'}/${p.dam_volume != null ? fmt(p.dam_volume) : '–'}/${p.dam_percent_storage != null ? `${Math.round(p.dam_percent_storage)}%` : '–'})`,
