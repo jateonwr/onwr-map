@@ -228,6 +228,7 @@ function updateRecUI() {
   $('btnRecPause').setAttribute('aria-label', rec.paused ? 'บันทึกต่อ' : 'พักการบันทึก');
   $('recDot').className = `w-3 h-3 rounded-full flex-none ${rec.paused ? 'bg-gray-400' : 'bg-red-600 animate-pulse'}`;
   const tickRec = () => {
+    if (!rec) { clearInterval(recTimer); return; }
     $('recTime').textContent = (rec.paused ? 'พัก · ' : '') + fmtDuration(elapsedOf(rec.track));
     $('recDist').textContent = fmtKm(rec.track.distance) + (rec.track.zones.length ? ` · ${rec.track.zones.join(', ')}` : '');
   };

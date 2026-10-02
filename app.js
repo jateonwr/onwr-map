@@ -27,7 +27,16 @@ const BASEMAPS = [
 ];
 
 const FIELD_LABELS = {
-  Name_tung: 'ชื่อทุ่ง', rai: 'พื้นที่ (ไร่)',
+  // ทุ่งรับน้ำ (พื้นที่ลุ่มต่ำ 10+1)
+  AREA_NAME: 'ชื่อทุ่ง', PROV_NAM_T: 'จังหวัด', AMPHOE_T: 'อำเภอ', OVER_R: 'รับน้ำจาก', Basin: 'ลุ่มน้ำ',
+  STORAGE: 'พื้นที่รับน้ำ (ไร่)', DEPTH: 'ความลึกน้ำ (ม.)', Cap_MCM: 'ความจุ (ล้าน ลบ.ม.)',
+  Status_Now: 'ปริมาณน้ำปัจจุบัน (ล้าน ลบ.ม.)',
+  // แหล่งน้ำขนาดใหญ่ / ขนาดกลาง
+  name: 'ชื่อ', tambol: 'ตำบล', amphoe: 'อำเภอ', province: 'จังหวัด', storage: 'ความจุ (ล้าน ลบ.ม.)',
+  agency: 'หน่วยงาน', Basin22: 'ลุ่มน้ำ', ONWR_Reg: 'สทนช. ภาค', REMARK: 'หมายเหตุ',
+  // สถานี
+  stn_code: 'รหัสสถานี', lat: 'ละติจูด', lng: 'ลองจิจูด',
+  // ลำน้ำ
   STREAM_ID: 'รหัสลำน้ำ', STREAM_NAM: 'ชื่อลำน้ำ', LOCAL_NAME: 'ชื่อท้องถิ่น',
   Hy_use_des: 'ลักษณะทางน้ำ', STRCLAS_DE: 'ชั้นลำน้ำ', SHAPE_Leng: 'ความยาว (กม.)',
   str_code: 'รหัสลำน้ำ', str_name: 'ชื่อลำน้ำ', SUBBASIN: 'ลุ่มน้ำสาขา', MBASIN: 'ลุ่มน้ำหลัก',
@@ -41,12 +50,33 @@ const OVERLAYS = [
   {
     id: 'tung', name: 'ทุ่งรับน้ำ', url: 'data/tung.geojson', visible: true, opacity: 0.75,
     swatch: TUNG_FILL, outline: TUNG_LINE,
-    titleField: 'Name_tung', legend: true, labels: true, isZone: true,
+    titleField: 'AREA_NAME', legend: true, labels: true, isZone: true,
     layers: (src, op) => [
       { id: `${src}-fill`, type: 'fill', source: src,
         paint: { 'fill-color': TUNG_FILL, 'fill-opacity': op } },
       { id: `${src}-line`, type: 'line', source: src, layout: { 'line-join': 'round' },
         paint: { 'line-color': TUNG_LINE, 'line-width': ['interpolate', ['linear'], ['zoom'], 7, 2, 11, 3, 15, 4] } },
+    ],
+    opacityProps: [['fill', 'fill-opacity', 1]],
+  },
+  {
+    id: 'water-m', name: 'แหล่งน้ำขนาดกลาง', url: 'data/water-m.geojson', visible: true, opacity: 0.6,
+    swatch: '#7dd3fc', outline: '#0284c7', titleField: 'name',
+    layers: (src, op) => [
+      { id: `${src}-fill`, type: 'fill', source: src, paint: { 'fill-color': '#7dd3fc', 'fill-opacity': op } },
+      { id: `${src}-line`, type: 'line', source: src,
+        paint: { 'line-color': '#0284c7', 'line-width': ['interpolate', ['linear'], ['zoom'], 7, 0.5, 12, 1.5] } },
+    ],
+    opacityProps: [['fill', 'fill-opacity', 1]],
+  },
+  {
+    id: 'water-l', name: 'แหล่งน้ำขนาดใหญ่', url: 'data/water-l.geojson', visible: true, opacity: 0.7,
+    swatch: '#38bdf8', outline: '#0369a1', titleField: 'name',
+    labels: true, labelClass: 'water-label', labelMinZoom: 9,
+    layers: (src, op) => [
+      { id: `${src}-fill`, type: 'fill', source: src, paint: { 'fill-color': '#38bdf8', 'fill-opacity': op } },
+      { id: `${src}-line`, type: 'line', source: src,
+        paint: { 'line-color': '#0369a1', 'line-width': ['interpolate', ['linear'], ['zoom'], 6, 0.8, 12, 2] } },
     ],
     opacityProps: [['fill', 'fill-opacity', 1]],
   },
@@ -72,6 +102,17 @@ const OVERLAYS = [
                  'line-width': ['interpolate', ['linear'], ['zoom'], 6, 1.8, 10, 3, 15, 6] } },
     ],
     opacityProps: [['casing', 'line-opacity', 0.8], ['line', 'line-opacity', 1]],
+  },
+  {
+    id: 'stations', name: 'สถานี', url: 'data/stations.geojson', visible: true, opacity: 1,
+    swatch: '#f97316', titleField: 'stn_code',
+    labels: true, labelClass: 'stn-label', labelMinZoom: 7, labelAnchor: 'left', labelOffset: [10, 0],
+    layers: (src, op) => [
+      { id: `${src}-circle`, type: 'circle', source: src,
+        paint: { 'circle-color': '#f97316', 'circle-opacity': op, 'circle-stroke-color': '#ffffff', 'circle-stroke-width': 2,
+                 'circle-stroke-opacity': op, 'circle-radius': ['interpolate', ['linear'], ['zoom'], 6, 5, 12, 8] } },
+    ],
+    opacityProps: [['circle', 'circle-opacity', 1], ['circle', 'circle-stroke-opacity', 1]],
   },
 ];
 
@@ -192,18 +233,17 @@ function createLabels(o) {
     .filter(f => f.properties.label_lng != null)
     .map(f => {
       const el = document.createElement('div');
-      el.className = 'tung-label';
+      el.className = o.labelClass || 'tung-label';
       el.innerHTML = '<div class="n"></div><div class="v"></div>';
       el.firstChild.textContent = f.properties[o.titleField];
       st.labelEls[f.properties[o.titleField]] = el;
-      return new maplibregl.Marker({ element: el }).setLngLat([f.properties.label_lng, f.properties.label_lat]);
+      return new maplibregl.Marker({ element: el, anchor: o.labelAnchor || 'center', offset: o.labelOffset || [0, 0] }).setLngLat([f.properties.label_lng, f.properties.label_lat]);
     });
 }
 function updateLabels() {
-  const show = map.getZoom() >= 8.5;
   for (const o of OVERLAYS) {
     const st = overlayState[o.id];
-    const on = show && st.visible;
+    const on = map.getZoom() >= (o.labelMinZoom ?? 8.5) && st.visible;
     st.labels.forEach(m => {
       if (on && !m.shown) m.addTo(map);
       if (!on && m.shown) m.remove();
@@ -273,7 +313,7 @@ $('basemapList').addEventListener('click', e => {
   activeBase = btn.dataset.base;
   store.set('basemap', activeBase);
   BASEMAPS.forEach(b => map.setLayoutProperty(`base-${b.id}`, 'visibility', b.id === activeBase ? 'visible' : 'none'));
-  document.querySelectorAll('.tung-label').forEach(el => {
+  document.querySelectorAll('.tung-label, .water-label, .stn-label').forEach(el => {
     el.style.color = activeBase === 'satellite' ? '#fff' : '';
     el.style.textShadow = activeBase === 'satellite' ? '0 0 3px #000, 0 0 3px #000' : '';
   });
