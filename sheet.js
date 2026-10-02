@@ -16,6 +16,7 @@ const SHEETS = [
   {
     key: 'sheet',            // ชื่อที่ใช้เก็บค่าล่าสุดในเครื่อง
     layer: 'tung',
+    displayName: true,       // ใช้คอลัมน์ "ชื่อแสดง" แทนชื่อเดิม
     url: 'https://docs.google.com/spreadsheets/d/1Z-avaBjksZ6km8dr90KO6eZ54nIBEik2FH9uavvA4O0/edit?usp=sharing',
     fields: {                // ค่าในชั้นข้อมูล : คำที่ต้องมีในหัวคอลัมน์ (จับตามลำดับ)
       Cap_Pot:    ['ศักยภาพ', 'Cap_Pot'],      // ต้องอยู่ก่อน "ความจุ" (หัวคอลัมน์มีคำว่าความจุเหมือนกัน)
@@ -103,7 +104,8 @@ for (const cfg of SHEETS) {
   const columns = () => {
     const hs = S.headers.map(h => String(h || '').toLowerCase());
     const used = new Set([0]);
-    const displayIdx = hs.findIndex((h, i) => i > 0 && SHEET_COMMON.displayHeaders.some(k => h.includes(k.toLowerCase())));
+    const displayIdx = !cfg.displayName ? -1
+      : hs.findIndex((h, i) => i > 0 && SHEET_COMMON.displayHeaders.some(k => h.includes(k.toLowerCase())));
     if (displayIdx > 0) used.add(displayIdx);
     const fieldIdx = {};
     for (const [field, keys] of Object.entries(cfg.fields)) {
