@@ -37,7 +37,7 @@ const FIELD_LABELS = {
   // สถานี
   stn_code: 'รหัสสถานี', lat: 'ละติจูด', lng: 'ลองจิจูด',
   dam_storage: 'ความจุที่ระดับเก็บกัก (ล้าน ลบ.ม.)', dam_volume: 'ปริมาณน้ำในอ่าง (ล้าน ลบ.ม.)',
-  dam_percent_storage: 'ปริมาณน้ำ (% ความจุ)', discharge: 'ระบายน้ำ (ลบ.ม./วินาที)',
+  dam_percent_storage: 'ปริมาณน้ำ (% ความจุ)', discharge: 'ค่าที่ 1', discharge2: 'ค่าที่ 2',
   // ลำน้ำ
   STREAM_ID: 'รหัสลำน้ำ', STREAM_NAM: 'ชื่อลำน้ำ', LOCAL_NAME: 'ชื่อท้องถิ่น',
   Hy_use_des: 'ลักษณะทางน้ำ', STRCLAS_DE: 'ชั้นลำน้ำ', SHAPE_Leng: 'ความยาว (กม.)', length_km: 'ความยาวรวม (กม.)',
@@ -104,7 +104,11 @@ const OVERLAYS = [
     swatch: '#0284c7', titleField: 'name',
     labels: true, labelClass: 'water-label', labelMinZoom: 7.5, labelAnchor: 'left', labelOffset: [15, 0],
     // ค่าระบายน้ำจาก Sheet เขื่อน (ดู sheet.js → extras)
-    labelExtra: p => p.discharge != null ? `(${fmt(p.discharge)} ลบ.ม./วิ)` : '',
+    labelExtra: p => {
+      if (p.discharge == null && p.discharge2 == null) return '';
+      const v = x => x != null ? x.toLocaleString('th-TH', { maximumFractionDigits: 2, useGrouping: false }) : '–';
+      return `(${v(p.discharge)}, ${v(p.discharge2)})`;
+    },
     layers: (src, op) => [
       { id: `${src}-icon`, type: 'symbol', source: src,
         layout: { 'icon-image': 'rect-blue', 'icon-allow-overlap': true, 'icon-ignore-placement': true,
