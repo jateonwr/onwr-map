@@ -57,7 +57,7 @@ const OVERLAYS = [
   {
     id: 'tung', name: 'ทุ่งรับน้ำ', url: 'data/tung.geojson', visible: true, opacity: 0.75,
     icon: 'area', swatch: TUNG_FILL, outline: TUNG_LINE,
-    titleField: 'AREA_NAME', legend: true, labels: true, isZone: true,
+    titleField: 'AREA_NAME', legend: true, legendTitle: 'รายชื่อทุ่ง', labels: true, isZone: true,
     // บรรทัดใต้ชื่อทุ่ง: (ความจุศักยภาพ/ความจุ/ปริมาณน้ำปัจจุบัน/ปริมาณ÷ความจุ %)
     labelExtra: p => {
       const pot = p.Cap_Pot, cap = p.Cap_MCM, now = p.Status_Now;
@@ -438,12 +438,20 @@ function renderLayerPanel() {
   $('overlayList').innerHTML = OVERLAYS.map(o => {
     const st = overlayState[o.id];
     const failed = !map.getSource(o.id);
+    // รายชื่อ (พับเก็บได้ · ค่าเริ่มต้นพับไว้ · จำสถานะไว้ในเครื่อง)
+    const open = store.get(`legend:${o.id}`, false);
     const legend = o.legend && st.data ? `
-      <div class="flex flex-wrap gap-1.5 mt-3 ${st.visible ? '' : 'hidden'}" data-legend="${o.id}">
-        ${st.data.features.map(f => `
-          <button data-zoomfeat="${o.id}:${f.id}" class="flex items-center gap-1.5 rounded-full bg-gray-100 active:bg-gray-200 pl-2 pr-2.5 h-8 text-[13px]">
-            ${layerIcon(o, 14)}${escapeHtml(displayName(o, f.properties))}
-          </button>`).join('')}
+      <div class="mt-3 ${st.visible ? '' : 'hidden'}" data-legend="${o.id}">
+        <button data-legend-toggle="${o.id}" aria-expanded="${open}" class="flex items-center gap-1 text-[13px] text-gray-600 h-8 -ml-1 px-1 rounded-lg active:bg-gray-100">
+          ${o.legendTitle || `รายชื่อ${o.name}`} (${st.data.features.length})
+          <svg class="w-4 h-4 transition-transform ${open ? 'rotate-180' : ''}" viewBox="0 0 24 24" fill="currentColor"><path d="M7.4 8.6 12 13.2l4.6-4.6L18 10l-6 6-6-6z"/></svg>
+        </button>
+        <div class="flex flex-wrap gap-1.5 mt-1 ${open ? '' : 'hidden'}" data-legend-list="${o.id}">
+          ${st.data.features.map(f => `
+            <button data-zoomfeat="${o.id}:${f.id}" class="flex items-center gap-1.5 rounded-full bg-gray-100 active:bg-gray-200 pl-2 pr-2.5 h-8 text-[13px]">
+              ${layerIcon(o, 14)}${escapeHtml(displayName(o, f.properties))}
+            </button>`).join('')}
+        </div>
       </div>` : '';
     return `
       <div class="rounded-2xl border border-gray-200 p-4 ${failed ? 'opacity-50' : ''}">
@@ -504,6 +512,15 @@ $('overlayList').addEventListener('input', e => {
 });
 
 $('overlayList').addEventListener('click', e => {
+  const tg = e.target.closest('[data-legend-toggle]');
+  if (tg) {
+    const id = tg.dataset.legendToggle, open = tg.getAttribute('aria-expanded') !== 'true';
+    store.set(`legend:${id}`, open);
+    tg.setAttribute('aria-expanded', String(open));
+    tg.querySelector('svg').classList.toggle('rotate-180', open);
+    document.querySelector(`[data-legend-list="${id}"]`).classList.toggle('hidden', !open);
+    return;
+  }
   const fit = e.target.closest('[data-fit]');
   if (fit) { fitTo(overlayState[fit.dataset.fit].bounds); return; }
   const zf = e.target.closest('[data-zoomfeat]');
