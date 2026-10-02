@@ -16,7 +16,7 @@
  * ============================================================ */
 
 const SHEET = {
-  url: '',             // เช่น 'https://docs.google.com/spreadsheets/d/xxxxxxxx/edit#gid=0'
+  url: 'https://docs.google.com/spreadsheets/d/1Z-avaBjksZ6km8dr90KO6eZ54nIBEik2FH9uavvA4O0/edit?usp=sharing',
   layer: 'tung',       // ชั้นข้อมูลที่จะจับคู่ (ใช้คอลัมน์ชื่อทุ่ง)
   mapValues: 2,        // จำนวนค่า "อื่น ๆ" ที่แสดงเป็นป้ายใต้ชื่อทุ่ง
   refreshMinutes: 5,   // ดึงค่าใหม่ทุกกี่นาที (ระหว่างเปิดแอป)
@@ -72,9 +72,12 @@ async function loadSheet() {
     const text = await res.text();
     if (/^\s*</.test(text)) throw new Error('ได้หน้าเว็บแทน CSV');
     const rows = parseCSV(text.replace(/^﻿/, '')).map(r => r.map(c => c.trim()));
-    const headers = rows.shift() || [];
+    let headers = rows.shift() || [];
+    let n = headers.length;
+    while (n > 0 && !headers[n - 1]) n--;            // ตัดคอลัมน์ว่างท้ายตาราง
+    headers = headers.slice(0, n);
     sheetState.headers = headers;
-    sheetState.rows = rows.filter(r => r[0]);
+    sheetState.rows = rows.filter(r => r[0]).map(r => r.slice(0, n));
     sheetState.fetchedAt = Date.now();
     sheetState.error = null;
     store.set('sheet', { headers: sheetState.headers, rows: sheetState.rows, fetchedAt: sheetState.fetchedAt });
