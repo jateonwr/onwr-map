@@ -1,37 +1,49 @@
 'use strict';
 
 /* ============================================================
- *  ค่าจาก Google Sheet → แสดงบนทุ่งรับน้ำ
+ *  ค่าจาก Google Sheet → ใช้แทนค่าเดิมของชั้นข้อมูล (ปรับเองได้)
  *
- *  วิธีตั้งค่า Sheet (ดูตัวอย่างใน sheet-template.csv)
- *   1. แถวแรกเป็นหัวคอลัมน์
- *        A: ชื่อทุ่ง                            ← สะกดให้ตรงกับในแผนที่
- *        B: ความจุ (ล้าน ลบ.ม.)                ← ใช้แทน Cap_MCM ใน shp
- *        C: ปริมาณน้ำปัจจุบัน (ล้าน ลบ.ม.)        ← ใช้แทน Status_Now ใน shp
- *        D: วันที่ข้อมูล                         ← (ไม่ใส่ก็ได้)
- *        E, F, … คอลัมน์อื่น ๆ                   ← (ไม่ใส่ก็ได้) แสดงเป็นป้ายใต้ชื่อทุ่ง + ในแผงข้อมูล
- *      ช่องที่ว่างจะใช้ค่าเดิมจาก shp · คอลัมน์ตัวเลขห้ามใส่ข้อความปน (เช่น "-")
+ *  วิธีตั้งค่า Sheet (ดูตัวอย่างใน sheet-template.csv / sheet-template-dam.csv)
+ *   1. แถวแรกเป็นหัวคอลัมน์ · คอลัมน์ A = ชื่อ (สะกดให้ตรงกับในแผนที่)
+ *      คอลัมน์ถัดไปจับจาก "คำในหัวคอลัมน์" ตาม fields ด้านล่าง
+ *      คอลัมน์วันที่ (ไม่ใส่ก็ได้) และคอลัมน์อื่น ๆ (แสดงเป็นป้ายใต้ชื่อ + ในแผงข้อมูล)
+ *      ช่องที่ว่างจะใช้ค่าเดิม · คอลัมน์ตัวเลขห้ามใส่ข้อความปน (เช่น "-")
  *   2. Share → General access → "Anyone with the link" → Viewer
- *   3. คัดลอกลิงก์ของ Sheet มาวางใน SHEET.url ด้านล่าง
+ *   3. คัดลอกลิงก์ของ Sheet มาวางใน url ด้านล่าง
  * ============================================================ */
 
-const SHEET = {
-  url: 'https://docs.google.com/spreadsheets/d/1Z-avaBjksZ6km8dr90KO6eZ54nIBEik2FH9uavvA4O0/edit?usp=sharing',
-  layer: 'tung',       // ชั้นข้อมูลที่จะจับคู่ (ใช้คอลัมน์ชื่อทุ่ง)
-  mapValues: 2,        // จำนวนค่า "อื่น ๆ" ที่แสดงเป็นป้ายใต้ชื่อทุ่ง
-  refreshMinutes: 5,   // ดึงค่าใหม่ทุกกี่นาที (ระหว่างเปิดแอป)
-
-  // คอลัมน์ที่ใช้แทนค่าใน shp — จับจากหัวคอลัมน์ที่มีคำเหล่านี้
-  fields: {
-    Cap_MCM:    ['ความจุ', 'Cap_MCM'],
-    Status_Now: ['ปริมาณน้ำ', 'Status_Now'],
+const SHEETS = [
+  {
+    key: 'sheet',            // ชื่อที่ใช้เก็บค่าล่าสุดในเครื่อง
+    layer: 'tung',
+    url: 'https://docs.google.com/spreadsheets/d/1Z-avaBjksZ6km8dr90KO6eZ54nIBEik2FH9uavvA4O0/edit?usp=sharing',
+    fields: {                // ค่าในชั้นข้อมูล : คำที่ต้องมีในหัวคอลัมน์
+      Cap_MCM:    ['ความจุ', 'Cap_MCM'],
+      Status_Now: ['ปริมาณน้ำ', 'Status_Now'],
+    },
   },
-  dateHeaders: ['วันที่', 'อัปเดต', 'อัพเดท', 'date'],   // คอลัมน์วันที่ของข้อมูล (แสดงในแผงข้อมูล)
+  {
+    key: 'sheet:dam',
+    layer: 'water-l',        // แหล่งน้ำขนาดใหญ่ — ค่าตั้งต้นมาจาก API กรมชลประทาน (data/dam-api.json)
+    url: '',                 // ← วางลิงก์ Google Sheet ของเขื่อนที่นี่
+    fields: {
+      dam_percent_storage: ['%', 'เปอร์เซ็นต์', 'dam_percent_storage'],   // ต้องอยู่ก่อน "ปริมาณน้ำ"
+      dam_storage:         ['ความจุ', 'dam_storage'],
+      dam_volume:          ['ปริมาณน้ำ', 'dam_volume'],
+    },
+    // ถ้าปรับความจุ/ปริมาณน้ำ แต่ไม่ได้ใส่ % → คำนวณ % ใหม่
+    derive(p, changed) {
+      if ((changed.dam_storage || changed.dam_volume) && !changed.dam_percent_storage && p.dam_storage > 0 && p.dam_volume != null) {
+        p.dam_percent_storage = Math.round(p.dam_volume / p.dam_storage * 10000) / 100;
+      }
+    },
+  },
+];
+const SHEET_COMMON = {
+  mapValues: 2,        // จำนวนค่า "อื่น ๆ" ที่แสดงเป็นป้ายใต้ชื่อ
+  refreshMinutes: 5,   // ดึงค่าใหม่ทุกกี่นาที (ระหว่างเปิดแอป)
+  dateHeaders: ['วันที่', 'อัปเดต', 'อัพเดท', 'date'],
 };
-
-const sheetState = store.get('sheet', null) || { headers: [], rows: [], fetchedAt: 0 };
-sheetState.error = null;
-let sheetLoading = false;
 
 /* แปลงลิงก์ Sheet → ลิงก์ CSV */
 function sheetCsvUrl(url) {
@@ -60,131 +72,133 @@ function parseCSV(text) {
   return rows;
 }
 
-const normName = s => String(s || '').replace(/\s+/g, '').normalize('NFC');
-
-async function loadSheet() {
-  const url = sheetCsvUrl(SHEET.url);
-  if (!url || sheetLoading) return;
-  sheetLoading = true;
-  try {
-    const res = await fetch(url, { cache: 'no-store' });
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    const text = await res.text();
-    if (/^\s*</.test(text)) throw new Error('ได้หน้าเว็บแทน CSV');
-    const rows = parseCSV(text.replace(/^﻿/, '')).map(r => r.map(c => c.trim()));
-    let headers = rows.shift() || [];
-    let n = headers.length;
-    while (n > 0 && !headers[n - 1]) n--;            // ตัดคอลัมน์ว่างท้ายตาราง
-    headers = headers.slice(0, n);
-    sheetState.headers = headers;
-    sheetState.rows = rows.filter(r => r[0]).map(r => r.slice(0, n));
-    sheetState.fetchedAt = Date.now();
-    sheetState.error = null;
-    store.set('sheet', { headers: sheetState.headers, rows: sheetState.rows, fetchedAt: sheetState.fetchedAt });
-  } catch (err) {
-    console.error('Google Sheet:', err);
-    sheetState.error = 'ดึงข้อมูลไม่สำเร็จ — ตรวจว่าแชร์ Sheet แบบ "ทุกคนที่มีลิงก์" แล้ว';
-  } finally {
-    sheetLoading = false;
-  }
-  applySheet();
-}
-
-/* หาแถวของ feature จากชื่อ */
-function sheetRowFor(name) {
-  const n = normName(name);
-  return sheetState.rows.find(r => normName(r[0]) === n) || null;
-}
-
-/* หัวคอลัมน์ไหนใช้ทำอะไร → { field: index }, dateIdx, otherIdx[] */
-function sheetColumns() {
-  const hs = sheetState.headers.map(h => String(h || '').toLowerCase());
-  const used = new Set([0]);
-  const fieldIdx = {};
-  for (const [field, keys] of Object.entries(SHEET.fields)) {
-    const i = hs.findIndex((h, i) => !used.has(i) && keys.some(k => h.includes(k.toLowerCase())));
-    if (i > 0) { fieldIdx[field] = i; used.add(i); }
-  }
-  const dateIdx = hs.findIndex((h, i) => !used.has(i) && SHEET.dateHeaders.some(k => h.includes(k.toLowerCase())));
-  if (dateIdx > 0) used.add(dateIdx);
-  const otherIdx = hs.map((h, i) => i).filter(i => !used.has(i) && sheetState.headers[i]);
-  return { fieldIdx, dateIdx, otherIdx };
-}
-
 const toNumber = v => {
-  const n = parseFloat(String(v ?? '').replace(/,/g, ''));
+  const n = parseFloat(String(v ?? '').replace(/[,%\s]/g, ''));
   return Number.isFinite(n) ? n : null;
 };
-
-/* ค่าอื่น ๆ (นอกจากคอลัมน์ที่ใช้แทน shp และวันที่) */
-function sheetValues(row) {
-  return sheetColumns().otherIdx.map(i => [sheetState.headers[i], row[i]]).filter(([h, v]) => v !== undefined && v !== '');
-}
-
-function applySheet() {
-  const o = OVERLAYS.find(x => x.id === SHEET.layer);
-  const st = o && overlayState[o.id];
-  if (!st || !st.data) return;
-  const { fieldIdx } = sheetColumns();
-
-  // ใช้ค่าจาก Sheet แทนค่าใน shp (ถ้าช่องว่าง/ไม่ใช่ตัวเลข → ใช้ค่าเดิมจาก shp)
-  for (const f of st.data.features) {
-    f.shpProps = f.shpProps || { ...f.properties };
-    const row = sheetRowFor(f.properties[o.titleField]);
-    for (const field of Object.keys(SHEET.fields)) {
-      const n = row && fieldIdx[field] != null ? toNumber(row[fieldIdx[field]]) : null;
-      f.properties[field] = n ?? f.shpProps[field];
-    }
-  }
-
-  for (const [name, el] of Object.entries(st.labelEls)) {
-    const f = st.data.features.find(x => x.properties[o.titleField] === name);
-    if (f && o.labelExtra) el.querySelector('.c').textContent = o.labelExtra(f.properties);
-    const row = sheetRowFor(name);
-    const vals = row ? sheetValues(row).slice(0, SHEET.mapValues) : [];
-    el.querySelector('.v').innerHTML = vals
-      .map(([h, v]) => `<span class="k">${escapeHtml(h)}</span> ${escapeHtml(v)}`)
-      .join('<span class="sep"> · </span>');
-  }
-  renderLayerPanel();
-
-  // ถ้าแผงข้อมูลเปิดอยู่ที่ทุ่ง ให้รีเฟรชค่าด้วย
-  if (selectedInfo && selectedInfo.o === o) showInfo(o, selectedInfo.f);
-}
 
 function timeText(ms) {
   return new Date(ms).toLocaleString('th-TH', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) + ' น.';
 }
 
-layerNotes[SHEET.layer] = () => {
-  if (!SHEET.url) return '';
-  const st = overlayState[SHEET.layer];
-  const names = new Set(st.data.features.map(f => normName(f.properties[OVERLAYS.find(x => x.id === SHEET.layer).titleField])));
-  const unmatched = sheetState.rows.map(r => r[0]).filter(n => !names.has(normName(n)));
-  const parts = [];
-  if (sheetState.fetchedAt) parts.push(`Google Sheet: ${timeText(sheetState.fetchedAt)}`);
-  if (sheetState.error) parts.push(`<span class="text-red-600">${sheetState.error}</span>`);
-  if (unmatched.length) parts.push(`<span class="text-amber-700">ไม่พบชื่อในแผนที่: ${unmatched.map(escapeHtml).join(', ')}</span>`);
-  return parts.length ? `<div class="text-xs text-gray-500 mt-0.5">${parts.join('<br>')}</div>` : '';
-};
+/* ---------- แต่ละ Sheet ---------- */
+for (const cfg of SHEETS) {
+  const S = Object.assign(store.get(cfg.key, null) || { headers: [], rows: [], fetchedAt: 0 }, { error: null });
+  let loading = false;
+  const layer = () => OVERLAYS.find(x => x.id === cfg.layer);
 
-infoExtras.push((o, f) => {
-  if (o.id !== SHEET.layer) return '';
-  const row = sheetRowFor(f.properties[o.titleField]);
-  if (!row) return '';
-  const { dateIdx } = sheetColumns();
-  const vals = sheetValues(row);
-  const date = dateIdx > 0 && row[dateIdx] ? `ข้อมูลวันที่ ${escapeHtml(row[dateIdx])} · ` : '';
-  return vals.map(([h, v]) =>
-    `<div class="flex gap-4 py-2.5"><dt class="w-32 flex-none text-gray-500">${escapeHtml(h)}</dt><dd class="flex-1 min-w-0 break-words font-semibold">${escapeHtml(v)}</dd></div>`
-  ).join('') + `<div class="py-2.5 text-xs text-gray-400">${date}ดึงจาก Google Sheet ${timeText(sheetState.fetchedAt)}${sheetState.error ? ' (ค่าล่าสุดที่ดึงได้)' : ''}</div>`;
-});
+  const rowFor = name => {
+    const n = normName(name);
+    return S.rows.find(r => normName(r[0]) === n) || null;
+  };
 
-onMapReady.push(applySheet);
+  /* หัวคอลัมน์ไหนใช้ทำอะไร → { field: index }, dateIdx, otherIdx[] */
+  const columns = () => {
+    const hs = S.headers.map(h => String(h || '').toLowerCase());
+    const used = new Set([0]);
+    const fieldIdx = {};
+    for (const [field, keys] of Object.entries(cfg.fields)) {
+      const i = hs.findIndex((h, i) => !used.has(i) && keys.some(k => h.includes(k.toLowerCase())));
+      if (i > 0) { fieldIdx[field] = i; used.add(i); }
+    }
+    const dateIdx = hs.findIndex((h, i) => !used.has(i) && SHEET_COMMON.dateHeaders.some(k => h.includes(k.toLowerCase())));
+    if (dateIdx > 0) used.add(dateIdx);
+    const otherIdx = hs.map((h, i) => i).filter(i => !used.has(i) && S.headers[i]);
+    return { fieldIdx, dateIdx, otherIdx };
+  };
 
-/* ดึงตอนเปิดแอป + ทุก ๆ refreshMinutes + ตอนกลับมาที่แอป */
-loadSheet();
-setInterval(() => { if (document.visibilityState === 'visible') loadSheet(); }, SHEET.refreshMinutes * 60000);
-document.addEventListener('visibilitychange', () => {
-  if (document.visibilityState === 'visible' && Date.now() - sheetState.fetchedAt > SHEET.refreshMinutes * 60000) loadSheet();
-});
+  const otherValues = row => columns().otherIdx.map(i => [S.headers[i], row[i]]).filter(([, v]) => v !== undefined && v !== '');
+
+  function apply() {
+    const o = layer();
+    const st = o && overlayState[o.id];
+    if (!st || !st.data) return;
+    const { fieldIdx } = columns();
+
+    // ใช้ค่าจาก Sheet แทนค่าเดิม (ช่องว่าง/ไม่ใช่ตัวเลข → ใช้ค่าเดิม)
+    for (const f of st.data.features) {
+      f.baseProps = f.baseProps || { ...f.properties };
+      const row = rowFor(f.properties[o.titleField]);
+      const changed = {};
+      for (const field of Object.keys(cfg.fields)) {
+        const n = row && fieldIdx[field] != null ? toNumber(row[fieldIdx[field]]) : null;
+        changed[field] = n != null;
+        f.properties[field] = n ?? f.baseProps[field];
+      }
+      if (cfg.derive) cfg.derive(f.properties, changed);
+    }
+
+    for (const [name, el] of Object.entries(st.labelEls)) {
+      const f = st.data.features.find(x => x.properties[o.titleField] === name);
+      if (f && o.labelExtra) el.querySelector('.c').textContent = o.labelExtra(f.properties);
+      const row = rowFor(name);
+      el.querySelector('.v').innerHTML = (row ? otherValues(row).slice(0, SHEET_COMMON.mapValues) : [])
+        .map(([h, v]) => `<span class="k">${escapeHtml(h)}</span> ${escapeHtml(v)}`)
+        .join('<span class="sep"> · </span>');
+    }
+    renderLayerPanel();
+    if (selectedInfo && selectedInfo.o === o) showInfo(o, selectedInfo.f);
+  }
+
+  async function load() {
+    const url = sheetCsvUrl(cfg.url);
+    if (!url || loading) return;
+    loading = true;
+    try {
+      const res = await fetch(url, { cache: 'no-store' });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const text = await res.text();
+      if (/^\s*</.test(text)) throw new Error('ได้หน้าเว็บแทน CSV');
+      const rows = parseCSV(text.replace(/^﻿/, '')).map(r => r.map(c => c.trim()));
+      let headers = rows.shift() || [];
+      let n = headers.length;
+      while (n > 0 && !headers[n - 1]) n--;            // ตัดคอลัมน์ว่างท้ายตาราง
+      S.headers = headers.slice(0, n);
+      S.rows = rows.filter(r => r[0]).map(r => r.slice(0, n));
+      S.fetchedAt = Date.now();
+      S.error = null;
+      store.set(cfg.key, { headers: S.headers, rows: S.rows, fetchedAt: S.fetchedAt });
+    } catch (err) {
+      console.error('Google Sheet:', cfg.layer, err);
+      S.error = 'ดึงข้อมูลไม่สำเร็จ — ตรวจว่าแชร์ Sheet แบบ "ทุกคนที่มีลิงก์" แล้ว';
+    } finally {
+      loading = false;
+    }
+    apply();
+  }
+
+  // ข้อความใต้ชื่อชั้นข้อมูลในแผง (ต่อท้ายข้อความเดิมถ้ามี)
+  const prevNote = layerNotes[cfg.layer];
+  layerNotes[cfg.layer] = () => {
+    const before = prevNote ? prevNote() : '';
+    if (!cfg.url) return before;
+    const o = layer(), st = overlayState[cfg.layer];
+    const names = new Set(st.data.features.map(f => normName(f.properties[o.titleField])));
+    const unmatched = S.rows.map(r => r[0]).filter(n => !names.has(normName(n)));
+    const parts = [];
+    if (S.fetchedAt) parts.push(`Google Sheet: ${timeText(S.fetchedAt)}`);
+    if (S.error) parts.push(`<span class="text-red-600">${S.error}</span>`);
+    if (unmatched.length) parts.push(`<span class="text-amber-700">ไม่พบชื่อในแผนที่: ${unmatched.map(escapeHtml).join(', ')}</span>`);
+    return before + (parts.length ? `<div class="text-xs text-gray-500 mt-0.5">${parts.join('<br>')}</div>` : '');
+  };
+
+  infoExtras.push((o, f) => {
+    if (o.id !== cfg.layer) return '';
+    const row = rowFor(f.properties[o.titleField]);
+    if (!row) return '';
+    const { dateIdx } = columns();
+    const date = dateIdx > 0 && row[dateIdx] ? `ข้อมูลวันที่ ${escapeHtml(row[dateIdx])} · ` : '';
+    return otherValues(row).map(([h, v]) =>
+      `<div class="flex gap-4 py-2.5"><dt class="w-32 flex-none text-gray-500">${escapeHtml(h)}</dt><dd class="flex-1 min-w-0 break-words font-semibold">${escapeHtml(v)}</dd></div>`
+    ).join('') + `<div class="py-2.5 text-xs text-gray-400">${date}ปรับค่าจาก Google Sheet ${timeText(S.fetchedAt)}${S.error ? ' (ค่าล่าสุดที่ดึงได้)' : ''}</div>`;
+  });
+
+  onMapReady.push(apply);
+
+  /* ดึงตอนเปิดแอป + ทุก ๆ refreshMinutes + ตอนกลับมาที่แอป */
+  load();
+  setInterval(() => { if (document.visibilityState === 'visible') load(); }, SHEET_COMMON.refreshMinutes * 60000);
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible' && Date.now() - S.fetchedAt > SHEET_COMMON.refreshMinutes * 60000) load();
+  });
+}

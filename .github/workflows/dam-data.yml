@@ -1,0 +1,42 @@
+# ดึงข้อมูลเขื่อนจาก API กรมชลประทานทุกชั่วโมง → data/dam-api.json
+# (API ไม่อนุญาตให้เบราว์เซอร์ดึงข้ามเว็บ จึงให้ GitHub ดึงมาเก็บไว้ใน repo แทน)
+name: อัปเดตข้อมูลเขื่อน
+
+on:
+  schedule:
+    - cron: '17 * * * *'      # ทุกชั่วโมง นาทีที่ 17 (เวลา UTC)
+  workflow_dispatch:          # กดรันเองได้ที่แท็บ Actions
+  push:
+    paths:
+      - scripts/fetch_dam.py
+      - .github/workflows/dam-data.yml
+
+permissions:
+  contents: write
+
+concurrency:
+  group: dam-data
+  cancel-in-progress: false
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: ดึงข้อมูล
+        run: python scripts/fetch_dam.py
+      - name: บันทึกถ้าข้อมูลเปลี่ยน
+        run: |
+          if git diff --quiet -- data/dam-api.json; then
+            echo "ข้อมูลไม่เปลี่ยน"
+          else
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add data/dam-api.json
+            git commit -m "อัปเดตข้อมูลเขื่อน $(date -u +'%Y-%m-%d %H:%M') UTC"
+            git pull --rebase
+            git push
+          fi

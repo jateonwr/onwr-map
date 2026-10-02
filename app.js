@@ -36,6 +36,8 @@ const FIELD_LABELS = {
   agency: 'หน่วยงาน', Basin22: 'ลุ่มน้ำ', ONWR_Reg: 'สทนช. ภาค', REMARK: 'หมายเหตุ',
   // สถานี
   stn_code: 'รหัสสถานี', lat: 'ละติจูด', lng: 'ลองจิจูด',
+  dam_storage: 'ความจุที่ระดับเก็บกัก (ล้าน ลบ.ม.)', dam_volume: 'ปริมาณน้ำในอ่าง (ล้าน ลบ.ม.)',
+  dam_percent_storage: 'ปริมาณน้ำ (% ความจุ)', dam_date: 'ข้อมูลวันที่',
   // ลำน้ำ
   STREAM_ID: 'รหัสลำน้ำ', STREAM_NAM: 'ชื่อลำน้ำ', LOCAL_NAME: 'ชื่อท้องถิ่น',
   Hy_use_des: 'ลักษณะทางน้ำ', STRCLAS_DE: 'ชั้นลำน้ำ', SHAPE_Leng: 'ความยาว (กม.)',
@@ -80,6 +82,23 @@ const OVERLAYS = [
     id: 'water-l', name: 'แหล่งน้ำขนาดใหญ่', url: 'data/water-l.geojson', visible: true, opacity: 0.7,
     swatch: '#38bdf8', outline: '#0369a1', titleField: 'name',
     labels: true, labelClass: 'water-label', labelMinZoom: 9,
+    // ข้อมูลเขื่อนจาก API กรมชลประทาน (GitHub Actions ดึงมาเก็บทุกชั่วโมง → data/dam-api.json)
+    enrich: async data => {
+      const api = await fetch('data/dam-api.json', { cache: 'no-cache' }).then(r => r.json()).catch(() => null);
+      if (!api || !Array.isArray(api.data)) return;
+      const byName = new Map(api.data.map(d => [normName(d.name), d]));
+      for (const f of data.features) {
+        const d = byName.get(normName(f.properties.name));
+        if (!d) continue;
+        Object.assign(f.properties, {
+          dam_storage: d.dam_storage, dam_volume: d.dam_volume,
+          dam_percent_storage: d.dam_percent_storage, dam_date: d.date,
+        });
+      }
+    },
+    // บรรทัดใต้ชื่อเขื่อน: (ความจุ/ปริมาณน้ำ/%)
+    labelExtra: p => p.dam_storage == null && p.dam_volume == null ? ''
+      : `(${p.dam_storage != null ? fmt(p.dam_storage) : '–'}/${p.dam_volume != null ? fmt(p.dam_volume) : '–'}/${p.dam_percent_storage != null ? `${Math.round(p.dam_percent_storage)}%` : '–'})`,
     layers: (src, op) => [
       { id: `${src}-fill`, type: 'fill', source: src, paint: { 'fill-color': '#38bdf8', 'fill-opacity': op } },
       { id: `${src}-line`, type: 'line', source: src,
@@ -114,6 +133,7 @@ const OVERLAYS = [
     id: 'streams-main', name: 'ลำน้ำหลัก', url: 'data/streams-main.geojson', visible: true, opacity: 1,
     swatch: '#1d4ed8', titleField: 'STREAM_NAM',
     lineLabels: 'data/streams-main-labels.json',   // จุดวางชื่อตามแนวแม่น้ำ (คำนวณไว้ล่วงหน้า: ตำแหน่ง, มุม, ซูมขั้นต่ำ)
+    labelMinZoom: 8.5,                             // เริ่มแสดงชื่อพร้อมชื่อทุ่งรับน้ำ
     layers: (src, op) => [
       { id: `${src}-casing`, type: 'line', source: src, layout: { 'line-cap': 'round', 'line-join': 'round' },
         paint: { 'line-color': '#ffffff', 'line-opacity': op * 0.8,
@@ -144,6 +164,8 @@ const OVERLAYS = [
 const LOCATE_ZOOM = 10;     // ระดับซูมเมื่อกดปุ่มตำแหน่งของฉัน (มากขึ้น = ใกล้ขึ้น)
 
 const $ = id => document.getElementById(id);
+/* เทียบชื่อแบบไม่สนช่องว่าง / การันต์ / นิคหิต+สระอา (ํา = ำ) */
+const normName = s => String(s || '').normalize('NFC').replace(/\s+/g, '').replace(/ํา/g, 'ำ').replace(/์/g, '');
 
 /* จุดเชื่อมให้ไฟล์อื่น (sheet.js, track.js) ต่อเพิ่มความสามารถ */
 const onMapReady = [];      // fn()            — หลังโหลดชั้นข้อมูลเสร็จ
@@ -226,7 +248,9 @@ map.on('load', async () => {
     try {
       const res = await fetch(o.url, { cache: 'no-cache' });   // เช็กกับ server ทุกครั้ง กันใช้ไฟล์เก่าที่ค้างในเครื่อง
       if (!res.ok) throw new Error(res.status);
-      st.data = await res.json();
+      const data = await res.json();
+      if (o.enrich) await o.enrich(data);
+      st.data = data;
     } catch (err) {
       console.error(o.url, err);
       toast(`โหลด “${o.name}” ไม่สำเร็จ — ต้องเปิดผ่าน web server (ไม่ใช่ file://)`);
@@ -309,7 +333,7 @@ function updateLabels() {
     // ชื่อตามแนวแม่น้ำ: 1 ชื่อต่อแม่น้ำ วางกลางช่วงที่มองเห็นในจอ
     // เลือกจากจุดที่มุมเอียงคำนวณไว้สำหรับระดับซูมนี้ก่อน (ข้อความจะขนานกับลำน้ำพอดี)
     for (const group of Object.values(st.lineGroups || {})) {
-      const visible = st.visible ? group.filter(m => insideInner(m.getLngLat())) : [];
+      const visible = on ? group.filter(m => insideInner(m.getLngLat())) : [];
       const fit = visible.filter(m => m.minZoom <= z);
       const pool = fit.length ? fit : visible;
       const chosen = pool[Math.floor(pool.length / 2)];
@@ -490,6 +514,8 @@ map.on('click', e => {
 
 function fmt(v) {
   if (typeof v === 'number') return v.toLocaleString('th-TH', { maximumFractionDigits: 2 });
+  if (typeof v === 'string' && /^\d{4}-\d{2}-\d{2}T/.test(v))
+    return new Date(v).toLocaleDateString('th-TH', { day: 'numeric', month: 'short', year: 'numeric' });
   return String(v);
 }
 
