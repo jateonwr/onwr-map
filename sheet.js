@@ -25,7 +25,7 @@ const SHEETS = [
   {
     key: 'sheet:dam',
     layer: 'water-l',        // แหล่งน้ำขนาดใหญ่ (เขื่อน)
-    url: '',                 // ← วางลิงก์ Google Sheet ของเขื่อนที่นี่
+    url: 'https://docs.google.com/spreadsheets/d/1p1wrzr5_O-1nkvG55OHNbdcSd05UixAIaEJTTPzUJ_w/edit?usp=sharing',
     fields: {
       dam_percent_storage: ['%', 'เปอร์เซ็นต์', 'dam_percent_storage'],   // ต้องอยู่ก่อน "ปริมาณน้ำ"
       dam_storage:         ['ความจุ', 'dam_storage'],
