@@ -46,7 +46,7 @@ const FIELD_LABELS = {
 };
 
 const TUNG_FILL = '#c7bca8';
-const TUNG_LINE = '#b3261e';
+const TUNG_LINE = '#1e3a8a';   // ขอบทุ่งรับน้ำ: น้ำเงินเข้ม
 
 const OVERLAYS = [
   {
