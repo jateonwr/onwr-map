@@ -189,7 +189,7 @@ map.on('load', async () => {
   await Promise.all(OVERLAYS.map(async o => {
     const st = overlayState[o.id];
     try {
-      const res = await fetch(o.url);
+      const res = await fetch(o.url, { cache: 'no-cache' });   // เช็กกับ server ทุกครั้ง กันใช้ไฟล์เก่าที่ค้างในเครื่อง
       if (!res.ok) throw new Error(res.status);
       st.data = await res.json();
     } catch (err) {

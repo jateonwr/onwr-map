@@ -4,6 +4,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
   <meta name="theme-color" content="#ffffff" />
+  <meta http-equiv="Cache-Control" content="no-cache" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="mobile-web-app-capable" content="yes" />
   <title>แผนที่ลุ่มน้ำ</title>
@@ -186,8 +187,9 @@
   <div id="backdrop" class="fixed inset-0 z-20 bg-black/20 hidden md:!hidden"></div>
   <div id="toast" class="fixed left-1/2 -translate-x-1/2 safe-bottom mb-24 z-40 bg-gray-900 text-white text-sm rounded-lg px-4 py-2.5 shadow-lg hidden max-w-[90vw] text-center"></div>
 
-  <script src="app.js"></script>
-  <script src="sheet.js"></script>
-  <script src="track.js"></script>
+  <!-- เปลี่ยนเลข ?v= ทุกครั้งที่แก้ไฟล์ .js เพื่อให้มือถือโหลดไฟล์ใหม่ -->
+  <script src="app.js?v=4"></script>
+  <script src="sheet.js?v=4"></script>
+  <script src="track.js?v=4"></script>
 </body>
 </html>
