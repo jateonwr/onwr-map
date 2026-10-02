@@ -204,7 +204,6 @@ for (const cfg of SHEETS) {
     (cfg.extras || []).forEach(x => names.add(normName(x.name)));
     const unmatched = S.rows.map(r => r[0]).filter(n => !names.has(normName(n)));
     const parts = [];
-    if (S.fetchedAt) parts.push(`Google Sheet: ${timeText(S.fetchedAt)}`);
     if (S.error) parts.push(`<span class="text-red-600">${S.error}</span>`);
     if (unmatched.length) parts.push(`<span class="text-amber-700">ไม่พบชื่อในแผนที่: ${unmatched.map(escapeHtml).join(', ')}</span>`);
     return before + (parts.length ? `<div class="text-xs text-gray-500 mt-0.5">${parts.join('<br>')}</div>` : '');
@@ -305,7 +304,6 @@ async function refreshVisitPoints() {
 
 layerNotes[VISIT_SHEET.layer] = () => {
   const parts = [];
-  if (visitState.fetchedAt) parts.push(`Google Sheet: ${timeText(visitState.fetchedAt)}`);
   if (visitState.error) parts.push(`<span class="text-red-600">${visitState.error}</span>`);
   if (visitState.skipped.length) parts.push(`<span class="text-amber-700">พิกัดไม่ถูกต้อง (ข้าม): ${visitState.skipped.map(escapeHtml).join(', ')}</span>`);
   return parts.length ? `<div class="text-xs text-gray-500 mt-0.5">${parts.join('<br>')}</div>` : '';
