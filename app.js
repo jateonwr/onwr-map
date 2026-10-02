@@ -51,6 +51,13 @@ const OVERLAYS = [
     id: 'tung', name: 'ทุ่งรับน้ำ', url: 'data/tung.geojson', visible: true, opacity: 0.75,
     swatch: TUNG_FILL, outline: TUNG_LINE,
     titleField: 'AREA_NAME', legend: true, labels: true, isZone: true,
+    // บรรทัดใต้ชื่อทุ่ง: (ความจุ/ปริมาณน้ำปัจจุบัน/ปริมาณ÷ความจุ %)
+    labelExtra: p => {
+      const cap = p.Cap_MCM, now = p.Status_Now;
+      if (cap == null && now == null) return '';
+      const pct = cap > 0 && now != null ? `${Math.round(now / cap * 100)}%` : '–';
+      return `(${cap != null ? fmt(cap) : '–'}/${now != null ? fmt(now) : '–'}/${pct})`;
+    },
     layers: (src, op) => [
       { id: `${src}-fill`, type: 'fill', source: src,
         paint: { 'fill-color': TUNG_FILL, 'fill-opacity': op } },
@@ -234,8 +241,9 @@ function createLabels(o) {
     .map(f => {
       const el = document.createElement('div');
       el.className = o.labelClass || 'tung-label';
-      el.innerHTML = '<div class="n"></div><div class="v"></div>';
+      el.innerHTML = '<div class="n"></div><div class="c"></div><div class="v"></div>';
       el.firstChild.textContent = f.properties[o.titleField];
+      if (o.labelExtra) el.children[1].textContent = o.labelExtra(f.properties);
       st.labelEls[f.properties[o.titleField]] = el;
       return new maplibregl.Marker({ element: el, anchor: o.labelAnchor || 'center', offset: o.labelOffset || [0, 0] }).setLngLat([f.properties.label_lng, f.properties.label_lat]);
     });
