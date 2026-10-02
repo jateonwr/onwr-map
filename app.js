@@ -99,8 +99,8 @@ const OVERLAYS = [
     opacityProps: [['fill', 'fill-opacity', 1]],
   },
   {
-    // แหล่งน้ำอื่น ๆ (จุด) — เพิ่มจุดได้ใน data/water-other.geojson
-    id: 'water-other', name: 'แหล่งน้ำอื่น ๆ', url: 'data/water-other.geojson', visible: true, opacity: 1,
+    // อาคารบังคับน้ำ (จุด) — เพิ่มจุดได้ใน data/water-other.geojson
+    id: 'water-other', name: 'อาคารบังคับน้ำ', url: 'data/water-other.geojson', visible: true, opacity: 1,
     swatch: '#0284c7', titleField: 'name',
     labels: true, labelClass: 'water-label', labelMinZoom: 7.5, labelAnchor: 'left', labelOffset: [15, 0],
     // ค่าระบายน้ำจาก Sheet เขื่อน (ดู sheet.js → extras)
