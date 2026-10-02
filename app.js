@@ -56,7 +56,7 @@ const TUNG_LINE = '#1e3a8a';   // ขอบทุ่งรับน้ำ: น�
 const OVERLAYS = [
   {
     id: 'tung', name: 'ทุ่งรับน้ำ', url: 'data/tung.geojson', visible: true, opacity: 0.75,
-    swatch: TUNG_FILL, outline: TUNG_LINE,
+    icon: 'area', swatch: TUNG_FILL, outline: TUNG_LINE,
     titleField: 'AREA_NAME', legend: true, labels: true, isZone: true,
     // บรรทัดใต้ชื่อทุ่ง: (ความจุศักยภาพ/ความจุ/ปริมาณน้ำปัจจุบัน/ปริมาณ÷ความจุ %)
     labelExtra: p => {
@@ -76,7 +76,7 @@ const OVERLAYS = [
   },
   {
     id: 'water-m', name: 'แหล่งน้ำขนาดกลาง', url: 'data/water-m.geojson', visible: true, opacity: 0.6,
-    swatch: '#7dd3fc', outline: '#0284c7', titleField: 'name',
+    icon: 'lake', swatch: '#7dd3fc', outline: '#0284c7', titleField: 'name',
     layers: (src, op) => [
       { id: `${src}-fill`, type: 'fill', source: src, paint: { 'fill-color': '#7dd3fc', 'fill-opacity': op } },
       { id: `${src}-line`, type: 'line', source: src,
@@ -86,7 +86,7 @@ const OVERLAYS = [
   },
   {
     id: 'water-l', name: 'แหล่งน้ำขนาดใหญ่', url: 'data/water-l.geojson', visible: true, opacity: 0.7,
-    swatch: '#38bdf8', outline: '#0369a1', titleField: 'name',
+    icon: 'lake', swatch: '#38bdf8', outline: '#0369a1', titleField: 'name',
     labels: true, labelClass: 'water-label', labelMinZoom: 7.5,
     // บรรทัดใต้ชื่อเขื่อน: (ความจุ/ปริมาณน้ำ/%)
     labelExtra: p => p.dam_storage == null && p.dam_volume == null ? ''
@@ -101,7 +101,7 @@ const OVERLAYS = [
   {
     // อาคารบังคับน้ำ (จุด) — เพิ่มจุดได้ใน data/water-other.geojson
     id: 'water-other', name: 'อาคารบังคับน้ำ', url: 'data/water-other.geojson', visible: true, opacity: 1,
-    swatch: '#0284c7', titleField: 'name',
+    icon: 'rect', swatch: '#0284c7', titleField: 'name',
     labels: true, labelClass: 'water-label', labelMinZoom: 7.5, labelAnchor: 'left', labelOffset: [15, 0],
     // ค่าระบายน้ำจาก Sheet เขื่อน (ดู sheet.js → extras)
     labelExtra: p => {
@@ -120,7 +120,7 @@ const OVERLAYS = [
   {
     // ขอบเขตจังหวัด: เส้นสีดำ ไม่มีพื้น + ชื่อจังหวัด
     id: 'provinces', name: 'ขอบเขตจังหวัด', url: 'data/provinces.geojson', visible: true, opacity: 1,
-    swatch: 'transparent', outline: '#000000', titleField: 'name',
+    icon: 'boundary', swatch: 'transparent', outline: '#000000', titleField: 'name',
     labels: true, labelClass: 'prov-label', labelMinZoom: 7, noClick: true,
     countText: data => `${data.features.filter(f => f.geometry.type === 'Point').length} จังหวัด`,
     layers: (src, op) => [
@@ -133,7 +133,7 @@ const OVERLAYS = [
   },
   {
     id: 'streams-sub', name: 'ลำน้ำสาขา', url: 'data/streams-sub.geojson', visible: true, opacity: 1,
-    swatch: '#0ea5e9', titleField: 'str_name',
+    icon: 'line', swatch: '#0ea5e9', titleField: 'str_name',
     layers: (src, op) => [
       { id: `${src}-line`, type: 'line', source: src, layout: { 'line-cap': 'round', 'line-join': 'round' },
         paint: { 'line-color': '#0ea5e9', 'line-opacity': op,
@@ -143,7 +143,7 @@ const OVERLAYS = [
   },
   {
     id: 'streams-main', name: 'ลำน้ำหลัก', url: 'data/streams-main.geojson', visible: true, opacity: 1,
-    swatch: '#1d4ed8', titleField: 'STREAM_NAM',
+    icon: 'line-thick', swatch: '#1d4ed8', titleField: 'STREAM_NAM',
     lineLabels: 'data/streams-main-labels.json',   // จุดวางชื่อตามแนวแม่น้ำ (คำนวณไว้ล่วงหน้า: ตำแหน่ง, มุม, ซูมขั้นต่ำ)
     labelMinZoom: 7.5,                             // ระดับซูมที่เริ่มแสดงชื่อแม่น้ำ
     layers: (src, op) => [
@@ -158,7 +158,7 @@ const OVERLAYS = [
   },
   {
     id: 'stations', name: 'สถานี', url: 'data/stations.geojson', visible: true, opacity: 1,
-    swatch: '#f97316', titleField: 'stn_code',
+    icon: 'circle', swatch: '#f97316', titleField: 'stn_code',
     labels: true, labelClass: 'stn-label', labelMinZoom: 7.5, labelAnchor: 'left', labelOffset: [10, 0],
     layers: (src, op) => [
       { id: `${src}-circle`, type: 'circle', source: src,
@@ -170,7 +170,7 @@ const OVERLAYS = [
   {
     // จุดลงพื้นที่: ข้อมูลจาก Google Sheet (ตั้งลิงก์ใน sheet.js → VISIT_SHEET)
     id: 'visits', name: 'จุดลงพื้นที่', visible: true, opacity: 1,
-    swatch: '#dc2626', titleField: 'name',
+    icon: 'star', swatch: '#dc2626', titleField: 'name',
     loader: () => loadVisitPoints(),
     countText: data => `${data.features.length} จุด`,
     labels: true, labelClass: 'visit-label', labelMinZoom: 7.5, labelAnchor: 'left', labelOffset: [13, 0],
@@ -442,13 +442,13 @@ function renderLayerPanel() {
       <div class="flex flex-wrap gap-1.5 mt-3 ${st.visible ? '' : 'hidden'}" data-legend="${o.id}">
         ${st.data.features.map(f => `
           <button data-zoomfeat="${o.id}:${f.id}" class="flex items-center gap-1.5 rounded-full bg-gray-100 active:bg-gray-200 pl-2 pr-2.5 h-8 text-[13px]">
-            <span class="w-2.5 h-2.5 rounded-sm" style="${swatchStyle(o)}"></span>${escapeHtml(displayName(o, f.properties))}
+            ${layerIcon(o, 14)}${escapeHtml(displayName(o, f.properties))}
           </button>`).join('')}
       </div>` : '';
     return `
       <div class="rounded-2xl border border-gray-200 p-4 ${failed ? 'opacity-50' : ''}">
         <div class="flex items-center gap-3">
-          <span class="w-9 h-9 rounded-lg flex-none" style="${swatchStyle(o, 3)}"></span>
+          <span class="w-9 h-9 rounded-lg flex-none bg-gray-100 grid place-items-center">${layerIcon(o, 26)}</span>
           <div class="flex-1 min-w-0">
             <div class="font-medium">${o.name}</div>
             <div class="text-xs text-gray-500">${failed ? 'โหลดไม่สำเร็จ' : o.countText ? o.countText(st.data) : `${st.data.features.length} รายการ`}</div>
@@ -619,7 +619,7 @@ function showInfo(o, f) {
   const p = f.properties;
   $('infoTitle').textContent = displayName(o, p) || '(ไม่มีชื่อ)';
   $('infoLayer').textContent = o.name + (p.display_name && p.display_name !== p[o.titleField] ? ` · ชื่อเดิม: ${p[o.titleField]}` : '');
-  $('infoSwatch').style.cssText = swatchStyle(o);
+  $('infoSwatch').innerHTML = layerIcon(o, 20);
   $('infoBody').innerHTML = Object.entries(p)
     .filter(([k, v]) => FIELD_LABELS[k] && k !== o.titleField && v !== null && v !== '')
     .map(([k, v]) => `<div class="flex gap-4 py-2.5"><dt class="w-32 flex-none text-gray-500">${FIELD_LABELS[k]}</dt><dd class="flex-1 min-w-0 break-words">${escapeHtml((k === 'lat' || k === 'lng') && typeof v === 'number' ? v.toFixed(5) : fmt(v))}</dd></div>`)
@@ -630,8 +630,20 @@ function showInfo(o, f) {
 }
 
 function escapeHtml(s) { return s.replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])); }
-function swatchStyle(o, border = 2) {
-  return `background:${o.swatch};` + (o.outline ? `box-shadow:inset 0 0 0 ${border}px ${o.outline};` : '');
+/* ไอคอนของชั้นข้อมูล (หน้าตาเหมือนบนแผนที่) → SVG */
+const ICON_SHAPES = {
+  area:       (o) => `<path d="M4 7 11 3l9 2.5 1 8-4.5 7L8 21l-5-6z" fill="${o.swatch}" stroke="${o.outline}" stroke-width="2.6" stroke-linejoin="round"/>`,
+  boundary:   (o) => `<path d="M4 7 11 3l9 2.5 1 8-4.5 7L8 21l-5-6z" fill="none" stroke="${o.outline}" stroke-width="2.6" stroke-linejoin="round"/>`,
+  lake:       (o) => `<path d="M4.5 10c-.4-3 2.4-5.4 5.4-5 2 .3 3.1-.9 5.1-.6 3 .5 4.6 3.2 3.8 5.8-.5 1.6.8 3 .1 4.9-1 2.6-4.2 4-6.9 3.2-1.6-.5-3 .4-4.6-.3-2.4-1-3.6-3.6-2.9-6z" fill="${o.swatch}" stroke="${o.outline}" stroke-width="1.6" stroke-linejoin="round"/>`,
+  rect:       (o) => `<rect x="2.5" y="6.5" width="19" height="11" fill="${o.swatch}" stroke="#ffffff" stroke-width="2.5"/>`,
+  line:       (o) => `<path d="M2 17c3-6 5-6.5 7-2.5s4.5 4 6.5-1S19.5 7 22 9" fill="none" stroke="${o.swatch}" stroke-width="2" stroke-linecap="round"/>`,
+  'line-thick': (o) => `<path d="M2 17c3-6 5-6.5 7-2.5s4.5 4 6.5-1S19.5 7 22 9" fill="none" stroke="#ffffff" stroke-width="6" stroke-linecap="round"/><path d="M2 17c3-6 5-6.5 7-2.5s4.5 4 6.5-1S19.5 7 22 9" fill="none" stroke="${o.swatch}" stroke-width="3.4" stroke-linecap="round"/>`,
+  circle:     (o) => `<circle cx="12" cy="12" r="7" fill="${o.swatch}" stroke="#ffffff" stroke-width="2.5"/>`,
+  star:       (o) => `<path d="M12 2.5l2.8 5.8 6.3.8-4.6 4.4 1.2 6.3L12 16.8l-5.7 3 1.2-6.3-4.6-4.4 6.3-.8z" fill="${o.swatch}" stroke="#ffffff" stroke-width="1.5" stroke-linejoin="round"/>`,
+};
+function layerIcon(o, size = 20) {
+  const shape = ICON_SHAPES[o.icon] || ICON_SHAPES.area;
+  return `<svg width="${size}" height="${size}" viewBox="0 0 24 24" aria-hidden="true" style="display:block">${shape(o)}</svg>`;
 }
 function emptyFC() { return { type: 'FeatureCollection', features: [] }; }
 
@@ -880,7 +892,7 @@ function updateZone(fix) {
   const chip = $('zoneChip');
   if (!hit) { chip.classList.add('hidden'); chip.classList.remove('flex'); return; }
   $('zoneName').textContent = `${layer.name} ${displayName(layer, hit.properties)}`;
-  $('zoneSwatch').style.cssText = swatchStyle(layer);
+  $('zoneSwatch').innerHTML = layerIcon(layer, 16);
   chip.classList.remove('hidden'); chip.classList.add('flex');
 }
 
