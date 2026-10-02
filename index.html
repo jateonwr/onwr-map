@@ -7,7 +7,10 @@
   <meta http-equiv="Cache-Control" content="no-cache" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="mobile-web-app-capable" content="yes" />
-  <title>แผนที่ลุ่มน้ำ</title>
+  <title>สทนช. ลงพื้นที่</title>
+  <link rel="icon" type="image/png" href="assets/onwr-logo.png" />
+  <link rel="apple-touch-icon" href="assets/onwr-logo.png" />
+  <meta name="apple-mobile-web-app-title" content="สทนช. ลงพื้นที่" />
 
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+Thai:wght@400;500;600;700&display=swap" />
@@ -128,8 +131,10 @@
 <body class="font-sans bg-gray-100 text-gray-900 select-none">
   <div id="map"></div>
 
-  <!-- ด้านบนซ้าย: เครื่องมือวัดระยะ + อยู่ในทุ่งไหน -->
+  <!-- ด้านบนซ้าย: โลโก้ สทนช. + เครื่องมือวัดระยะ + ปุ่มลงพื้นที่ + อยู่ในทุ่งไหน -->
   <div class="absolute safe-top left-3 right-[76px] md:right-auto md:w-[380px] flex flex-col gap-2 pointer-events-none z-10">
+    <img src="assets/onwr-logo.png" alt="สำนักงานทรัพยากรน้ำแห่งชาติ (สทนช.)"
+      class="self-start w-12 h-auto mb-1 drop-shadow-[0_1px_3px_rgba(255,255,255,0.9)] select-none" draggable="false" />
     <div class="flex items-center gap-2">
       <button id="btnMeasure" aria-label="วัดระยะทาง" aria-pressed="false"
         class="pointer-events-auto w-12 h-12 flex-none rounded-full bg-white shadow-md grid place-items-center active:bg-gray-100">
@@ -259,9 +264,9 @@
   <div id="toast" class="fixed left-1/2 -translate-x-1/2 safe-bottom mb-24 z-40 bg-gray-900 text-white text-sm rounded-lg px-4 py-2.5 shadow-lg hidden max-w-[90vw] text-center"></div>
 
   <!-- เปลี่ยนเลข ?v= ทุกครั้งที่แก้ไฟล์ .js เพื่อให้มือถือโหลดไฟล์ใหม่ -->
-  <script src="app.js?v=36"></script>
-  <script src="sheet.js?v=36"></script>
-  <script src="track.js?v=36"></script>
-  <script src="measure.js?v=36"></script>
+  <script src="app.js?v=37"></script>
+  <script src="sheet.js?v=37"></script>
+  <script src="track.js?v=37"></script>
+  <script src="measure.js?v=37"></script>
 </body>
 </html>
