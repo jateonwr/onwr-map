@@ -113,15 +113,15 @@ const OVERLAYS = [
   },
   {
     // ขอบเขตจังหวัด: เส้นสีดำ ไม่มีพื้น + ชื่อจังหวัด
-    id: 'provinces', name: 'ขอบเขตจังหวัด', url: 'data/provinces.geojson', visible: true, opacity: 0.8,
-    swatch: 'transparent', outline: '#111827', titleField: 'name',
+    id: 'provinces', name: 'ขอบเขตจังหวัด', url: 'data/provinces.geojson', visible: true, opacity: 1,
+    swatch: 'transparent', outline: '#000000', titleField: 'name',
     labels: true, labelClass: 'prov-label', labelMinZoom: 7, noClick: true,
     countText: data => `${data.features.filter(f => f.geometry.type === 'Point').length} จังหวัด`,
     layers: (src, op) => [
       { id: `${src}-line`, type: 'line', source: src, filter: ['!=', '$type', 'Point'],
         layout: { 'line-join': 'round', 'line-cap': 'round' },
-        paint: { 'line-color': '#111827', 'line-opacity': op,
-                 'line-width': ['interpolate', ['linear'], ['zoom'], 6, 0.8, 10, 1.4, 14, 2.2] } },
+        paint: { 'line-color': '#000000', 'line-opacity': op,
+                 'line-width': ['interpolate', ['linear'], ['zoom'], 5, 1.5, 8, 2.5, 11, 3.5, 14, 4.5] } },
     ],
     opacityProps: [['line', 'line-opacity', 1]],
   },
