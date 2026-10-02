@@ -438,7 +438,7 @@ function renderLayerPanel() {
       <div class="flex flex-wrap gap-1.5 mt-3 ${st.visible ? '' : 'hidden'}" data-legend="${o.id}">
         ${st.data.features.map(f => `
           <button data-zoomfeat="${o.id}:${f.id}" class="flex items-center gap-1.5 rounded-full bg-gray-100 active:bg-gray-200 pl-2 pr-2.5 h-8 text-[13px]">
-            <span class="w-2.5 h-2.5 rounded-sm" style="${swatchStyle(o)}"></span>${f.properties[o.titleField]}
+            <span class="w-2.5 h-2.5 rounded-sm" style="${swatchStyle(o)}"></span>${escapeHtml(displayName(o, f.properties))}
           </button>`).join('')}
       </div>` : '';
     return `
@@ -607,11 +607,14 @@ function fmt(v) {
 
 let selectedInfo = null;   // { o, f } ที่แสดงในแผงข้อมูลอยู่
 
+/* ชื่อที่แสดง: "ชื่อแสดง" จาก Google Sheet ถ้ามี ไม่งั้นใช้ชื่อเดิมจากไฟล์ */
+const displayName = (o, p) => p.display_name || p[o.titleField];
+
 function showInfo(o, f) {
   selectedInfo = { o, f };
   const p = f.properties;
-  $('infoTitle').textContent = p[o.titleField] || '(ไม่มีชื่อ)';
-  $('infoLayer').textContent = o.name;
+  $('infoTitle').textContent = displayName(o, p) || '(ไม่มีชื่อ)';
+  $('infoLayer').textContent = o.name + (p.display_name && p.display_name !== p[o.titleField] ? ` · ชื่อเดิม: ${p[o.titleField]}` : '');
   $('infoSwatch').style.cssText = swatchStyle(o);
   $('infoBody').innerHTML = Object.entries(p)
     .filter(([k, v]) => FIELD_LABELS[k] && k !== o.titleField && v !== null && v !== '')
@@ -872,7 +875,7 @@ function updateZone(fix) {
   const hit = z && z.feature, layer = z && z.layer;
   const chip = $('zoneChip');
   if (!hit) { chip.classList.add('hidden'); chip.classList.remove('flex'); return; }
-  $('zoneName').textContent = `${layer.name} ${hit.properties[layer.titleField]}`;
+  $('zoneName').textContent = `${layer.name} ${displayName(layer, hit.properties)}`;
   $('zoneSwatch').style.cssText = swatchStyle(layer);
   chip.classList.remove('hidden'); chip.classList.add('flex');
 }

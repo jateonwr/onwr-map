@@ -175,7 +175,7 @@ function addTrackPoint(fix) {
   rec.lastPt = p;
 
   const z = zoneAt(p[0], p[1], false);
-  const zn = z && z.feature.properties[z.layer.titleField];
+  const zn = z && displayName(z.layer, z.feature.properties);
   if (zn && !t.zones.includes(zn)) t.zones.push(zn);
 
   map.getSource('track-live')?.setData(trackFeature(t));

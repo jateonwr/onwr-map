@@ -46,6 +46,7 @@ const SHEETS = [
   },
 ];
 const SHEET_COMMON = {
+  displayHeaders: ['ชื่อแสดง', 'display'],   // คอลัมน์ชื่อที่จะแสดงแทนชื่อเดิม (เว้นว่าง = ใช้ชื่อเดิม)
   mapValues: 2,        // จำนวนค่า "อื่น ๆ" ที่แสดงเป็นป้ายใต้ชื่อ
   refreshMinutes: 5,   // ดึงค่าใหม่ทุกกี่นาที (ระหว่างเปิดแอป)
   dateHeaders: ['วันที่', 'อัปเดต', 'อัพเดท', 'date'],
@@ -102,6 +103,8 @@ for (const cfg of SHEETS) {
   const columns = () => {
     const hs = S.headers.map(h => String(h || '').toLowerCase());
     const used = new Set([0]);
+    const displayIdx = hs.findIndex((h, i) => i > 0 && SHEET_COMMON.displayHeaders.some(k => h.includes(k.toLowerCase())));
+    if (displayIdx > 0) used.add(displayIdx);
     const fieldIdx = {};
     for (const [field, keys] of Object.entries(cfg.fields)) {
       const i = hs.findIndex((h, i) => !used.has(i) && keys.some(k => h.includes(k.toLowerCase())));
@@ -110,7 +113,7 @@ for (const cfg of SHEETS) {
     const dateIdx = hs.findIndex((h, i) => !used.has(i) && SHEET_COMMON.dateHeaders.some(k => h.includes(k.toLowerCase())));
     if (dateIdx > 0) used.add(dateIdx);
     const otherIdx = hs.map((h, i) => i).filter(i => !used.has(i) && S.headers[i]);
-    return { fieldIdx, dateIdx, otherIdx };
+    return { fieldIdx, dateIdx, otherIdx, displayIdx };
   };
 
   const otherValues = row => columns().otherIdx.map(i => [S.headers[i], row[i]]).filter(([, v]) => v !== undefined && v !== '');
@@ -119,7 +122,7 @@ for (const cfg of SHEETS) {
     const o = layer();
     const st = o && overlayState[o.id];
     if (!st || !st.data) return;
-    const { fieldIdx } = columns();
+    const { fieldIdx, displayIdx } = columns();
 
     // ใช้ค่าจาก Sheet แทนค่าเดิม (ช่องว่าง/ไม่ใช่ตัวเลข → ใช้ค่าเดิม)
     for (const f of st.data.features) {
@@ -132,10 +135,12 @@ for (const cfg of SHEETS) {
         f.properties[field] = n ?? f.baseProps[field];
       }
       if (cfg.derive) cfg.derive(f.properties, changed);
+      f.properties.display_name = row && displayIdx > 0 && row[displayIdx] ? row[displayIdx] : null;
     }
 
     for (const [name, el] of Object.entries(st.labelEls)) {
       const f = st.data.features.find(x => x.properties[o.titleField] === name);
+      if (f) el.querySelector('.n').textContent = displayName(o, f.properties);
       if (f && o.labelExtra) el.querySelector('.c').textContent = o.labelExtra(f.properties);
       const row = rowFor(name);
       el.querySelector('.v').innerHTML = (row ? otherValues(row).slice(0, SHEET_COMMON.mapValues) : [])
