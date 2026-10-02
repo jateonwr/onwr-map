@@ -449,7 +449,7 @@ function setFollow(mode) {
   if (mode === 'follow' && map.getBearing() !== 0) map.easeTo({ bearing: 0, duration: 400 });
 }
 
-function status(text) { $('gpsStatus').textContent = text; }
+function status(text) { const el = $('gpsStatus'); if (el) el.textContent = text; }
 
 function startTracking() {
   if (!('geolocation' in navigator)) { toast('อุปกรณ์นี้ไม่รองรับ GPS'); return false; }
