@@ -32,6 +32,11 @@ const SHEETS = [
       dam_storage:         ['ความจุ', 'dam_storage'],
       dam_volume:          ['ปริมาณน้ำ', 'dam_volume'],
     },
+    // แถวพิเศษ: ค่าในคอลัมน์ของ Sheet นี้ ไปแสดงที่จุดในชั้นข้อมูลอื่น
+    // เขื่อนเจ้าพระยา → คอลัมน์ "ความจุ" = ค่าระบายน้ำ (ลบ.ม./วินาที)
+    extras: [
+      { layer: 'water-other', name: 'เขื่อนเจ้าพระยา', from: 'dam_storage', to: 'discharge' },
+    ],
     // ถ้าปรับความจุ/ปริมาณน้ำ แต่ไม่ได้ใส่ % → คำนวณ % ใหม่
     derive(p, changed) {
       if ((changed.dam_storage || changed.dam_volume) && !changed.dam_percent_storage && p.dam_storage > 0 && p.dam_volume != null) {
@@ -137,6 +142,19 @@ for (const cfg of SHEETS) {
         .map(([h, v]) => `<span class="k">${escapeHtml(h)}</span> ${escapeHtml(v)}`)
         .join('<span class="sep"> · </span>');
     }
+    // แถวพิเศษ (เช่น ค่าระบายน้ำเขื่อนเจ้าพระยา)
+    for (const x of cfg.extras || []) {
+      const xo = OVERLAYS.find(l => l.id === x.layer), xst = overlayState[x.layer];
+      if (!xo || !xst || !xst.data) continue;
+      const f = xst.data.features.find(f => normName(f.properties[xo.titleField]) === normName(x.name));
+      if (!f) continue;
+      const row = rowFor(x.name);
+      f.properties[x.to] = row && fieldIdx[x.from] != null ? toNumber(row[fieldIdx[x.from]]) : null;
+      const el = xst.labelEls[f.properties[xo.titleField]];
+      if (el && xo.labelExtra) el.querySelector('.c').textContent = xo.labelExtra(f.properties);
+      if (selectedInfo && selectedInfo.o === xo && selectedInfo.f === f) showInfo(xo, f);
+    }
+
     renderLayerPanel();
     if (selectedInfo && selectedInfo.o === o) showInfo(o, selectedInfo.f);
   }
@@ -175,6 +193,7 @@ for (const cfg of SHEETS) {
     if (!cfg.url) return before;
     const o = layer(), st = overlayState[cfg.layer];
     const names = new Set(st.data.features.map(f => normName(f.properties[o.titleField])));
+    (cfg.extras || []).forEach(x => names.add(normName(x.name)));
     const unmatched = S.rows.map(r => r[0]).filter(n => !names.has(normName(n)));
     const parts = [];
     if (S.fetchedAt) parts.push(`Google Sheet: ${timeText(S.fetchedAt)}`);
