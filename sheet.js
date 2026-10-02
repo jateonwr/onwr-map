@@ -3,10 +3,14 @@
 /* ============================================================
  *  ค่าจาก Google Sheet → แสดงบนทุ่งรับน้ำ
  *
- *  วิธีตั้งค่า Sheet
+ *  วิธีตั้งค่า Sheet (ดูตัวอย่างใน sheet-template.csv)
  *   1. แถวแรกเป็นหัวคอลัมน์
- *      คอลัมน์ A = ชื่อทุ่ง (สะกดให้ตรงกับในแผนที่)
- *      คอลัมน์ B, C, … = ค่าที่จะแสดง (หัวคอลัมน์ใช้เป็นชื่อค่า เช่น "ระดับน้ำ (ม.)")
+ *        A: ชื่อทุ่ง                            ← สะกดให้ตรงกับในแผนที่
+ *        B: ความจุ (ล้าน ลบ.ม.)                ← ใช้แทน Cap_MCM ใน shp
+ *        C: ปริมาณน้ำปัจจุบัน (ล้าน ลบ.ม.)        ← ใช้แทน Status_Now ใน shp
+ *        D: วันที่ข้อมูล                         ← (ไม่ใส่ก็ได้)
+ *        E, F, … คอลัมน์อื่น ๆ                   ← (ไม่ใส่ก็ได้) แสดงเป็นป้ายใต้ชื่อทุ่ง + ในแผงข้อมูล
+ *      ช่องที่ว่างจะใช้ค่าเดิมจาก shp · คอลัมน์ตัวเลขห้ามใส่ข้อความปน (เช่น "-")
  *   2. Share → General access → "Anyone with the link" → Viewer
  *   3. คัดลอกลิงก์ของ Sheet มาวางใน SHEET.url ด้านล่าง
  * ============================================================ */
@@ -14,8 +18,15 @@
 const SHEET = {
   url: '',             // เช่น 'https://docs.google.com/spreadsheets/d/xxxxxxxx/edit#gid=0'
   layer: 'tung',       // ชั้นข้อมูลที่จะจับคู่ (ใช้คอลัมน์ชื่อทุ่ง)
-  mapValues: 2,        // จำนวนค่าที่แสดงบนแผนที่ใต้ชื่อทุ่ง
+  mapValues: 2,        // จำนวนค่า "อื่น ๆ" ที่แสดงเป็นป้ายใต้ชื่อทุ่ง
   refreshMinutes: 5,   // ดึงค่าใหม่ทุกกี่นาที (ระหว่างเปิดแอป)
+
+  // คอลัมน์ที่ใช้แทนค่าใน shp — จับจากหัวคอลัมน์ที่มีคำเหล่านี้
+  fields: {
+    Cap_MCM:    ['ความจุ', 'Cap_MCM'],
+    Status_Now: ['ปริมาณน้ำ', 'Status_Now'],
+  },
+  dateHeaders: ['วันที่', 'อัปเดต', 'อัพเดท', 'date'],   // คอลัมน์วันที่ของข้อมูล (แสดงในแผงข้อมูล)
 };
 
 const sheetState = store.get('sheet', null) || { headers: [], rows: [], fetchedAt: 0 };
@@ -82,17 +93,50 @@ function sheetRowFor(name) {
   return sheetState.rows.find(r => normName(r[0]) === n) || null;
 }
 
-/* คอลัมน์ค่า (ข้ามคอลัมน์ชื่อ และคอลัมน์ที่ไม่มีหัว) */
+/* หัวคอลัมน์ไหนใช้ทำอะไร → { field: index }, dateIdx, otherIdx[] */
+function sheetColumns() {
+  const hs = sheetState.headers.map(h => String(h || '').toLowerCase());
+  const used = new Set([0]);
+  const fieldIdx = {};
+  for (const [field, keys] of Object.entries(SHEET.fields)) {
+    const i = hs.findIndex((h, i) => !used.has(i) && keys.some(k => h.includes(k.toLowerCase())));
+    if (i > 0) { fieldIdx[field] = i; used.add(i); }
+  }
+  const dateIdx = hs.findIndex((h, i) => !used.has(i) && SHEET.dateHeaders.some(k => h.includes(k.toLowerCase())));
+  if (dateIdx > 0) used.add(dateIdx);
+  const otherIdx = hs.map((h, i) => i).filter(i => !used.has(i) && sheetState.headers[i]);
+  return { fieldIdx, dateIdx, otherIdx };
+}
+
+const toNumber = v => {
+  const n = parseFloat(String(v ?? '').replace(/,/g, ''));
+  return Number.isFinite(n) ? n : null;
+};
+
+/* ค่าอื่น ๆ (นอกจากคอลัมน์ที่ใช้แทน shp และวันที่) */
 function sheetValues(row) {
-  return sheetState.headers.map((h, i) => [h, row[i]]).slice(1).filter(([h, v]) => h && v !== undefined && v !== '');
+  return sheetColumns().otherIdx.map(i => [sheetState.headers[i], row[i]]).filter(([h, v]) => v !== undefined && v !== '');
 }
 
 function applySheet() {
   const o = OVERLAYS.find(x => x.id === SHEET.layer);
   const st = o && overlayState[o.id];
   if (!st || !st.data) return;
+  const { fieldIdx } = sheetColumns();
+
+  // ใช้ค่าจาก Sheet แทนค่าใน shp (ถ้าช่องว่าง/ไม่ใช่ตัวเลข → ใช้ค่าเดิมจาก shp)
+  for (const f of st.data.features) {
+    f.shpProps = f.shpProps || { ...f.properties };
+    const row = sheetRowFor(f.properties[o.titleField]);
+    for (const field of Object.keys(SHEET.fields)) {
+      const n = row && fieldIdx[field] != null ? toNumber(row[fieldIdx[field]]) : null;
+      f.properties[field] = n ?? f.shpProps[field];
+    }
+  }
 
   for (const [name, el] of Object.entries(st.labelEls)) {
+    const f = st.data.features.find(x => x.properties[o.titleField] === name);
+    if (f && o.labelExtra) el.querySelector('.c').textContent = o.labelExtra(f.properties);
     const row = sheetRowFor(name);
     const vals = row ? sheetValues(row).slice(0, SHEET.mapValues) : [];
     el.querySelector('.v').innerHTML = vals
@@ -125,11 +169,12 @@ infoExtras.push((o, f) => {
   if (o.id !== SHEET.layer) return '';
   const row = sheetRowFor(f.properties[o.titleField]);
   if (!row) return '';
+  const { dateIdx } = sheetColumns();
   const vals = sheetValues(row);
-  if (!vals.length) return '';
+  const date = dateIdx > 0 && row[dateIdx] ? `ข้อมูลวันที่ ${escapeHtml(row[dateIdx])} · ` : '';
   return vals.map(([h, v]) =>
     `<div class="flex gap-4 py-2.5"><dt class="w-32 flex-none text-gray-500">${escapeHtml(h)}</dt><dd class="flex-1 min-w-0 break-words font-semibold">${escapeHtml(v)}</dd></div>`
-  ).join('') + `<div class="py-2.5 text-xs text-gray-400">จาก Google Sheet · ${timeText(sheetState.fetchedAt)}${sheetState.error ? ' (ค่าล่าสุดที่ดึงได้)' : ''}</div>`;
+  ).join('') + `<div class="py-2.5 text-xs text-gray-400">${date}ดึงจาก Google Sheet ${timeText(sheetState.fetchedAt)}${sheetState.error ? ' (ค่าล่าสุดที่ดึงได้)' : ''}</div>`;
 });
 
 onMapReady.push(applySheet);
