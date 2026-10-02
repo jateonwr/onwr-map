@@ -510,6 +510,25 @@ $('overlayList').addEventListener('click', e => {
   }
 });
 
+/* เปิด/ปิดชั้นข้อมูลจากโค้ด (เหมือนกดสวิตช์ในแผง) */
+function setOverlayVisible(id, on) {
+  const o = OVERLAYS.find(x => x.id === id), st = overlayState[id];
+  if (!o || !map.getSource(id) || st.visible === on) return;
+  st.visible = on;
+  store.set(`vis:${id}`, on);
+  o.layers(id, st.opacity).forEach(l => map.setLayoutProperty(l.id, 'visibility', on ? 'visible' : 'none'));
+  updateLabels();
+  renderLayerPanel();
+}
+
+/* ปุ่มลงพื้นที่: ซูมให้เห็นจุดลงพื้นที่ทั้งหมด */
+$('btnVisits').onclick = () => {
+  const st = overlayState.visits;
+  if (!st || !st.data || !st.data.features.length) { toast('ยังไม่มีจุดลงพื้นที่ใน Google Sheet'); return; }
+  setOverlayVisible('visits', true);
+  fitTo(st.bounds);
+};
+
 function fitTo(bounds) {
   if (!bounds) return;
   setFollow('off');
