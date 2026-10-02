@@ -1,0 +1,22 @@
+{
+ "type": "FeatureCollection",
+ "features": [
+  {
+   "type": "Feature",
+   "properties": {
+    "name": "เขื่อนวังร่มเกล้า",
+    "lat": 15.501323,
+    "lng": 99.948361,
+    "label_lng": 99.948361,
+    "label_lat": 15.501323
+   },
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     99.948361,
+     15.501323
+    ]
+   }
+  }
+ ]
+}

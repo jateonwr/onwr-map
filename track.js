@@ -125,7 +125,8 @@ function resumeRecording() {
 
 async function stopRecording() {
   if (!rec) return;
-  if (!confirm('หยุดบันทึกเส้นทางนี้?')) return;
+  if (!await confirmModal('หยุดบันทึกเส้นทางนี้?', { ok: 'หยุดบันทึก', danger: true })) return;
+  if (!rec) return;
   const t = rec.track;
   if (!rec.paused) t.elapsed += Date.now() - rec.runStart;
   t.active = false;
@@ -293,7 +294,7 @@ $('trackList').addEventListener('click', async e => {
   } else if (btn.dataset.trackExport) {
     exportGPX(t);
   } else if (btn.dataset.trackDel) {
-    if (!confirm(`ลบเส้นทาง "${t.name}"?\nลบแล้วกู้คืนไม่ได้`)) return;
+    if (!await confirmModal(`ลบเส้นทาง "${t.name}"?\nลบแล้วกู้คืนไม่ได้`, { ok: 'ลบ', danger: true })) return;
     await trackDB.del(id);
     tracks = tracks.filter(x => x !== t);
     shownTracks.delete(id);

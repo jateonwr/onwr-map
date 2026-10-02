@@ -88,6 +88,18 @@ const OVERLAYS = [
     opacityProps: [['fill', 'fill-opacity', 1]],
   },
   {
+    // แหล่งน้ำอื่น ๆ (จุด) — เพิ่มจุดได้ใน data/water-other.geojson
+    id: 'water-other', name: 'แหล่งน้ำอื่น ๆ', url: 'data/water-other.geojson', visible: true, opacity: 1,
+    swatch: '#0284c7', titleField: 'name',
+    labels: true, labelClass: 'water-label', labelMinZoom: 8, labelAnchor: 'left', labelOffset: [11, 0],
+    layers: (src, op) => [
+      { id: `${src}-circle`, type: 'circle', source: src,
+        paint: { 'circle-color': '#0284c7', 'circle-opacity': op, 'circle-stroke-color': '#ffffff', 'circle-stroke-width': 2.5,
+                 'circle-stroke-opacity': op, 'circle-radius': ['interpolate', ['linear'], ['zoom'], 6, 5, 12, 8] } },
+    ],
+    opacityProps: [['circle', 'circle-opacity', 1], ['circle', 'circle-stroke-opacity', 1]],
+  },
+  {
     id: 'streams-sub', name: 'ลำน้ำสาขา', url: 'data/streams-sub.geojson', visible: true, opacity: 1,
     swatch: '#0ea5e9', titleField: 'str_name',
     layers: (src, op) => [
@@ -100,6 +112,7 @@ const OVERLAYS = [
   {
     id: 'streams-main', name: 'ลำน้ำหลัก', url: 'data/streams-main.geojson', visible: true, opacity: 1,
     swatch: '#1d4ed8', titleField: 'STREAM_NAM',
+    lineLabels: 'data/streams-main-labels.json',   // จุดวางชื่อตามแนวแม่น้ำ (คำนวณไว้ล่วงหน้า: ตำแหน่ง, มุม, ซูมขั้นต่ำ)
     layers: (src, op) => [
       { id: `${src}-casing`, type: 'line', source: src, layout: { 'line-cap': 'round', 'line-join': 'round' },
         paint: { 'line-color': '#ffffff', 'line-opacity': op * 0.8,
@@ -171,7 +184,7 @@ map.touchPitch.disable();
 const overlayState = Object.fromEntries(OVERLAYS.map(o => [o.id, {
   visible: store.get(`vis:${o.id}`, o.visible),
   opacity: store.get(`op:${o.id}`, o.opacity),
-  data: null, bounds: null, labels: [], labelEls: {},
+  data: null, bounds: null, labels: [], labelEls: {}, lineLabels: [],
 }]));
 
 /* ============================================================
@@ -207,6 +220,17 @@ map.on('load', async () => {
     st.data.features.forEach((f, i) => { f.id = i; });
     st.bounds = geomBounds(st.data);
     map.addSource(o.id, { type: 'geojson', data: st.data });
+    if (o.lineLabels) {
+      const pts = await fetch(o.lineLabels, { cache: 'no-cache' }).then(r => r.json()).catch(() => []);
+      st.lineLabels = pts.filter(d => d.z <= 12).map(d => {
+        const el = document.createElement('div');
+        el.className = 'river-label';
+        el.textContent = d.n;
+        const m = new maplibregl.Marker({ element: el, rotationAlignment: 'map', rotation: d.r }).setLngLat(d.c);
+        m.minZoom = d.z;
+        return m;
+      });
+    }
   }));
 
   // เรียงลำดับ: polygon ล่าง → เส้น → ไฮไลต์ → วงความแม่นยำ
@@ -248,18 +272,26 @@ function createLabels(o) {
       return new maplibregl.Marker({ element: el, anchor: o.labelAnchor || 'center', offset: o.labelOffset || [0, 0] }).setLngLat([f.properties.label_lng, f.properties.label_lat]);
     });
 }
+function showMarker(m, on) {
+  if (on && !m.shown) m.addTo(map);
+  if (!on && m.shown) m.remove();
+  m.shown = on;
+}
 function updateLabels() {
+  const z = map.getZoom();
+  const b = map.getBounds();
+  const [[w, s], [e, n]] = b.toArray();
+  const dx = (e - w) * 0.15, dy = (n - s) * 0.15;   // เผื่อขอบจอเล็กน้อย
+  const inView = ll => ll.lng > w - dx && ll.lng < e + dx && ll.lat > s - dy && ll.lat < n + dy;
   for (const o of OVERLAYS) {
     const st = overlayState[o.id];
-    const on = map.getZoom() >= (o.labelMinZoom ?? 8.5) && st.visible;
-    st.labels.forEach(m => {
-      if (on && !m.shown) m.addTo(map);
-      if (!on && m.shown) m.remove();
-      m.shown = on;
-    });
+    const on = z >= (o.labelMinZoom ?? 8.5) && st.visible;
+    st.labels.forEach(m => showMarker(m, on));
+    // ชื่อตามแนวแม่น้ำ: แสดงเฉพาะที่อยู่ในจอ และถึงระดับซูมของจุดนั้น
+    st.lineLabels.forEach(m => showMarker(m, st.visible && z >= m.minZoom && inView(m.getLngLat())));
   }
 }
-map.on('zoomend', updateLabels);
+map.on('moveend', updateLabels);
 
 /* ============================================================
  *  แผงชั้นข้อมูล
@@ -321,7 +353,7 @@ $('basemapList').addEventListener('click', e => {
   activeBase = btn.dataset.base;
   store.set('basemap', activeBase);
   BASEMAPS.forEach(b => map.setLayoutProperty(`base-${b.id}`, 'visibility', b.id === activeBase ? 'visible' : 'none'));
-  document.querySelectorAll('.tung-label, .water-label, .stn-label').forEach(el => {
+  document.querySelectorAll('.tung-label, .water-label, .stn-label, .river-label').forEach(el => {
     el.style.color = activeBase === 'satellite' ? '#fff' : '';
     el.style.textShadow = activeBase === 'satellite' ? '0 0 3px #000, 0 0 3px #000' : '';
   });
@@ -415,7 +447,7 @@ for (const id of ['layerSheet', 'infoSheet']) {
  * ============================================================ */
 
 const clickableLayers = () => OVERLAYS.flatMap(o => o.layers(o.id, 1).map(l => l.id))
-  .filter(id => map.getLayer(id) && map.getLayoutProperty(id, 'visibility') !== 'none' && !id.endsWith('-casing'));
+  .filter(id => map.getLayer(id) && map.getLayoutProperty(id, 'visibility') !== 'none' && !/-(casing|label2?)$/.test(id));
 
 map.on('click', e => {
   const pad = 10;
@@ -707,6 +739,33 @@ function updateZone(fix) {
 }
 
 /* ============================================================ */
+
+/* กล่องยืนยันกลางจอ → Promise<boolean> */
+function confirmModal(message, { ok = 'ยืนยัน', cancel = 'ยกเลิก', danger = false } = {}) {
+  return new Promise(resolve => {
+    const wrap = document.createElement('div');
+    wrap.className = 'fixed inset-0 z-50 grid place-items-center bg-black/40 p-6';
+    wrap.innerHTML = `
+      <div role="dialog" aria-modal="true" class="w-full max-w-[340px] rounded-2xl bg-white shadow-2xl p-5">
+        <p class="text-[17px] leading-snug text-gray-900 whitespace-pre-line"></p>
+        <div class="mt-5 grid grid-cols-2 gap-3">
+          <button data-r="0" class="h-12 rounded-xl bg-gray-100 text-gray-800 font-medium active:bg-gray-200">${cancel}</button>
+          <button data-r="1" class="h-12 rounded-xl text-white font-semibold ${danger ? 'bg-red-600 active:bg-red-700' : 'bg-blue-600 active:bg-blue-700'}">${ok}</button>
+        </div>
+      </div>`;
+    wrap.querySelector('p').textContent = message;
+    const done = v => { wrap.remove(); document.removeEventListener('keydown', onKey); resolve(v); };
+    const onKey = e => { if (e.key === 'Escape') done(false); };
+    wrap.addEventListener('click', e => {
+      const b = e.target.closest('[data-r]');
+      if (b) done(b.dataset.r === '1');
+      else if (e.target === wrap) done(false);
+    });
+    document.addEventListener('keydown', onKey);
+    document.body.appendChild(wrap);
+    wrap.querySelector('[data-r="1"]').focus();
+  });
+}
 
 let toastTimer;
 function toast(msg) {
