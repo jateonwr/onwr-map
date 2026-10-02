@@ -151,6 +151,8 @@ function updateMeasurePanel() {
     : 'แตะแผนที่เพิ่มจุด · ลากจุดเพื่อย้าย · แตะจุดเพื่อลบ';
   $('btnMeasureUndo').disabled = !m || !m.pts.length;
   $('btnMeasureUndo').style.opacity = $('btnMeasureUndo').disabled ? '0.35' : '';
+  $('btnMeasureClear').disabled = !measures.some(x => x.pts.length);
+  $('btnMeasureClear').style.opacity = $('btnMeasureClear').disabled ? '0.35' : '';
 
   const list = measures.filter(x => x.pts.length);
   $('measureList').innerHTML = list.length > 1 || (list.length === 1 && list[0].id !== activeMeasureId) ? list.map((x, n) => `
@@ -159,12 +161,11 @@ function updateMeasurePanel() {
         <span class="w-2.5 h-2.5 rounded-full" style="background:${x.color}"></span>เส้น ${n + 1} · ${fmtDist(totalOf(x))}
       </button>
       <button data-mdel="${x.id}" aria-label="ลบเส้น ${n + 1}" class="w-7 h-8 grid place-items-center opacity-70">✕</button>
-    </span>`).join('') + (list.length > 1 ? `
-    <button data-mclear class="rounded-full text-[13px] h-8 px-3 text-red-600 bg-red-50">ล้างทั้งหมด</button>` : '') : '';
+    </span>`).join('') : '';
 }
 
 $('measureList').addEventListener('click', async e => {
-  const sel = e.target.closest('[data-msel]'), del = e.target.closest('[data-mdel]'), clr = e.target.closest('[data-mclear]');
+  const sel = e.target.closest('[data-msel]'), del = e.target.closest('[data-mdel]');
   if (sel) {
     activeMeasureId = +sel.dataset.msel;
     const m = activeMeasure();
@@ -173,9 +174,6 @@ $('measureList').addEventListener('click', async e => {
     const id = +del.dataset.mdel;
     measures = measures.filter(m => m.id !== id);
     if (activeMeasureId === id) activeMeasureId = measures.length ? measures[measures.length - 1].id : null;
-  } else if (clr) {
-    if (!await confirmModal('ล้างเส้นวัดระยะทั้งหมด?', { ok: 'ล้างทั้งหมด', danger: true })) return;
-    measures = []; activeMeasureId = null;
   } else return;
   saveMeasures(); renderMeasure();
 });
@@ -194,6 +192,14 @@ $('btnMeasureUndo').onclick = () => {
   const m = activeMeasure();
   if (!m || !m.pts.length) return;
   m.pts.pop();
+  saveMeasures(); renderMeasure();
+};
+
+$('btnMeasureClear').onclick = async () => {
+  if (!measures.some(m => m.pts.length)) return;
+  if (!await confirmModal('ล้างเส้นวัดระยะทั้งหมด?', { ok: 'ล้างทั้งหมด', danger: true })) return;
+  measures = []; activeMeasureId = null;
+  newMeasure();
   saveMeasures(); renderMeasure();
 };
 
