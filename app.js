@@ -106,6 +106,20 @@ const OVERLAYS = [
     opacityProps: [['icon', 'icon-opacity', 1]],
   },
   {
+    // ขอบเขตจังหวัด: เส้นสีดำ ไม่มีพื้น + ชื่อจังหวัด
+    id: 'provinces', name: 'ขอบเขตจังหวัด', url: 'data/provinces.geojson', visible: true, opacity: 0.8,
+    swatch: 'transparent', outline: '#111827', titleField: 'name',
+    labels: true, labelClass: 'prov-label', labelMinZoom: 7, noClick: true,
+    countText: data => `${data.features.filter(f => f.geometry.type === 'Point').length} จังหวัด`,
+    layers: (src, op) => [
+      { id: `${src}-line`, type: 'line', source: src, filter: ['!=', '$type', 'Point'],
+        layout: { 'line-join': 'round', 'line-cap': 'round' },
+        paint: { 'line-color': '#111827', 'line-opacity': op,
+                 'line-width': ['interpolate', ['linear'], ['zoom'], 6, 0.8, 10, 1.4, 14, 2.2] } },
+    ],
+    opacityProps: [['line', 'line-opacity', 1]],
+  },
+  {
     id: 'streams-sub', name: 'ลำน้ำสาขา', url: 'data/streams-sub.geojson', visible: true, opacity: 1,
     swatch: '#0ea5e9', titleField: 'str_name',
     layers: (src, op) => [
@@ -386,7 +400,7 @@ function renderLayerPanel() {
           <span class="w-9 h-9 rounded-lg flex-none" style="${swatchStyle(o, 3)}"></span>
           <div class="flex-1 min-w-0">
             <div class="font-medium">${o.name}</div>
-            <div class="text-xs text-gray-500">${failed ? 'โหลดไม่สำเร็จ' : `${st.data.features.length} รายการ`}</div>
+            <div class="text-xs text-gray-500">${failed ? 'โหลดไม่สำเร็จ' : o.countText ? o.countText(st.data) : `${st.data.features.length} รายการ`}</div>
             ${!failed && layerNotes[o.id] ? layerNotes[o.id]() : ''}
           </div>
           <button data-fit="${o.id}" aria-label="ซูมไปที่${o.name}" class="w-10 h-10 rounded-full grid place-items-center active:bg-gray-100 ${failed ? 'hidden' : ''}">
@@ -409,7 +423,7 @@ $('basemapList').addEventListener('click', e => {
   activeBase = btn.dataset.base;
   store.set('basemap', activeBase);
   BASEMAPS.forEach(b => map.setLayoutProperty(`base-${b.id}`, 'visibility', b.id === activeBase ? 'visible' : 'none'));
-  document.querySelectorAll('.tung-label, .water-label, .stn-label, .river-label').forEach(el => {
+  document.querySelectorAll('.tung-label, .water-label, .stn-label, .river-label, .prov-label').forEach(el => {
     el.style.color = activeBase === 'satellite' ? '#fff' : '';
     el.style.textShadow = activeBase === 'satellite' ? '0 0 3px #000, 0 0 3px #000' : '';
   });
@@ -502,7 +516,7 @@ for (const id of ['layerSheet', 'infoSheet']) {
  *  แตะ feature → แสดงข้อมูล
  * ============================================================ */
 
-const clickableLayers = () => OVERLAYS.flatMap(o => o.layers(o.id, 1).map(l => l.id))
+const clickableLayers = () => OVERLAYS.filter(o => !o.noClick).flatMap(o => o.layers(o.id, 1).map(l => l.id))
   .filter(id => map.getLayer(id) && map.getLayoutProperty(id, 'visibility') !== 'none' && !/-(casing|label2?)$/.test(id));
 
 map.on('click', e => {
