@@ -222,14 +222,18 @@ map.on('load', async () => {
     map.addSource(o.id, { type: 'geojson', data: st.data });
     if (o.lineLabels) {
       const pts = await fetch(o.lineLabels, { cache: 'no-cache' }).then(r => r.json()).catch(() => []);
-      st.lineLabels = pts.filter(d => d.z <= 12).map(d => {
+      st.lineLabels = pts.map(d => {
         const el = document.createElement('div');
         el.className = 'river-label';
         el.textContent = d.n;
         const m = new maplibregl.Marker({ element: el, rotationAlignment: 'map', rotation: d.r }).setLngLat(d.c);
         m.minZoom = d.z;
+        m.river = d.n;
         return m;
       });
+      // จัดกลุ่มตามชื่อแม่น้ำ (เรียงตามแนวลำน้ำอยู่แล้ว)
+      st.lineGroups = {};
+      st.lineLabels.forEach(m => (st.lineGroups[m.river] = st.lineGroups[m.river] || []).push(m));
     }
   }));
 
@@ -281,14 +285,21 @@ function updateLabels() {
   const z = map.getZoom();
   const b = map.getBounds();
   const [[w, s], [e, n]] = b.toArray();
-  const dx = (e - w) * 0.15, dy = (n - s) * 0.15;   // เผื่อขอบจอเล็กน้อย
-  const inView = ll => ll.lng > w - dx && ll.lng < e + dx && ll.lat > s - dy && ll.lat < n + dy;
+  const ix = (e - w) * 0.12, iy = (n - s) * 0.08;   // ขอบด้านใน: ให้ชื่ออยู่ในจอทั้งคำ
+  const insideInner = ll => ll.lng > w + ix && ll.lng < e - ix && ll.lat > s + iy && ll.lat < n - iy;
   for (const o of OVERLAYS) {
     const st = overlayState[o.id];
     const on = z >= (o.labelMinZoom ?? 8.5) && st.visible;
     st.labels.forEach(m => showMarker(m, on));
-    // ชื่อตามแนวแม่น้ำ: แสดงเฉพาะที่อยู่ในจอ และถึงระดับซูมของจุดนั้น
-    st.lineLabels.forEach(m => showMarker(m, st.visible && z >= m.minZoom && inView(m.getLngLat())));
+    // ชื่อตามแนวแม่น้ำ: 1 ชื่อต่อแม่น้ำ วางกลางช่วงที่มองเห็นในจอ
+    // เลือกจากจุดที่มุมเอียงคำนวณไว้สำหรับระดับซูมนี้ก่อน (ข้อความจะขนานกับลำน้ำพอดี)
+    for (const group of Object.values(st.lineGroups || {})) {
+      const visible = st.visible ? group.filter(m => insideInner(m.getLngLat())) : [];
+      const fit = visible.filter(m => m.minZoom <= z);
+      const pool = fit.length ? fit : visible;
+      const chosen = pool[Math.floor(pool.length / 2)];
+      group.forEach(m => showMarker(m, m === chosen));
+    }
   }
 }
 map.on('moveend', updateLabels);
