@@ -325,16 +325,7 @@ async function exportGPX(t) {
   const pad = n => String(n).padStart(2, '0');
   const name = `track-${d.getFullYear()}${pad(d.getMonth() + 1)}${pad(d.getDate())}-${pad(d.getHours())}${pad(d.getMinutes())}.gpx`;
   const file = new File([toGPX(t)], name, { type: 'application/gpx+xml' });
-  // มือถือ: เปิดหน้าแชร์ (บันทึกลงไฟล์ / ส่ง LINE ฯลฯ) — คอม: ดาวน์โหลด
-  if (navigator.canShare && navigator.canShare({ files: [file] })) {
-    try { await navigator.share({ files: [file], title: t.name }); return; }
-    catch (err) { if (err.name === 'AbortError') return; }
-  }
-  const a = document.createElement('a');
-  a.href = URL.createObjectURL(file);
-  a.download = name;
-  document.body.appendChild(a); a.click(); a.remove();
-  setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+  await shareOrDownload(file, t.name);
 }
 
 /* ---------- เริ่มต้น: โหลดเส้นทางที่เก็บไว้ ---------- */

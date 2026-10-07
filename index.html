@@ -108,6 +108,14 @@
     }
     #btnMeasure[aria-pressed="true"] { background: #1a73e8; color: #fff; }
 
+    /* หน้าจัดวางภาพ (export designer) */
+    #designer .seg { display: flex; background: #f3f4f6; border-radius: 999px; padding: 2px; }
+    #designer .seg button { height: 32px; padding: 0 9px; border-radius: 999px; font-size: 12px; font-weight: 600; color: #374151; white-space: nowrap; }
+    #designer .seg button.seg-on { background: #1a73e8; color: #fff; }
+    #dsArea { background: #4b5563; }
+    #dsZoom { position: absolute; transform-origin: 0 0; }
+    #dsCanvas { pointer-events: none; transition: opacity .15s; }
+
     /* สวิตช์เปิด/ปิด */
     .switch { position: relative; width: 44px; height: 26px; flex: none; }
     .switch input { position: absolute; opacity: 0; inset: 0; margin: 0; cursor: pointer; z-index: 1; }
@@ -149,6 +157,11 @@
     <button id="btnVisits" aria-label="ซูมไปจุดลงพื้นที่"
       class="pointer-events-auto self-start w-12 h-12 flex-none rounded-full bg-white shadow-md grid place-items-center active:bg-gray-100">
       <svg class="w-6 h-6" viewBox="0 0 24 24"><path d="M12 2.8l2.7 5.6 6.1.8-4.5 4.2 1.1 6.1L12 16.6l-5.4 2.9 1.1-6.1-4.5-4.2 6.1-.8z" fill="#dc2626" stroke="#dc2626" stroke-width="1.2" stroke-linejoin="round"/></svg>
+    </button>
+    <!-- export ภาพแผนที่ A2/A3 -->
+    <button id="btnExport" aria-label="บันทึกภาพแผนที่ A2/A3"
+      class="pointer-events-auto self-start w-12 h-12 flex-none rounded-full bg-white shadow-md grid place-items-center active:bg-gray-100">
+      <svg class="w-6 h-6 text-gray-700" viewBox="0 0 24 24" fill="currentColor"><path d="M21 19V5c0-1.1-.9-2-2-2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2zM8.5 13.5l2.5 3.01L14.5 12l4.5 6H5l3.5-4.5z"/></svg>
     </button>
 
     <!-- แผงวัดระยะ -->
@@ -261,12 +274,58 @@
   </aside>
 
   <div id="backdrop" class="fixed inset-0 z-20 bg-black/20 hidden md:!hidden"></div>
+  <!-- หน้าจัดวางภาพแผนที่ A2/A3 -->
+  <div id="designer" class="hidden fixed inset-0 z-40 flex flex-col bg-gray-600">
+    <div class="flex items-center gap-1.5 px-1.5 bg-white shadow-md" style="padding-top: env(safe-area-inset-top); min-height: calc(env(safe-area-inset-top) + 56px);">
+      <button id="dsClose" aria-label="ปิด" class="w-9 h-10 rounded-full grid place-items-center active:bg-gray-100">
+        <svg class="w-6 h-6 text-gray-700" viewBox="0 0 24 24" fill="currentColor"><path d="M19 6.4L17.6 5 12 10.6 6.4 5 5 6.4 10.6 12 5 17.6 6.4 19 12 13.4 17.6 19 19 17.6 13.4 12z"/></svg>
+      </button>
+      <div class="seg"><button data-paper="A3">A3</button><button data-paper="A2">A2</button></div>
+      <div class="seg"><button data-mode="map">แผนที่</button><button data-mode="edit">จัดวาง</button></div>
+      <span class="flex-1"></span>
+      <button id="dsReset" aria-label="รีเซ็ต" class="w-9 h-10 rounded-full grid place-items-center active:bg-gray-100">
+        <svg class="w-5 h-5 text-gray-700" viewBox="0 0 24 24" fill="currentColor"><path d="M12 5V2L7 6l5 4V7c3.31 0 6 2.69 6 6s-2.69 6-6 6-6-2.69-6-6H4c0 4.42 3.58 8 8 8s8-3.58 8-8-3.58-8-8-8z"/></svg>
+      </button>
+      <button id="dsSettings" aria-label="ตั้งค่า" class="w-9 h-10 rounded-full grid place-items-center active:bg-gray-100">
+        <svg class="w-5 h-5 text-gray-700" viewBox="0 0 24 24" fill="currentColor"><path d="M19.43 12.98c.04-.32.07-.64.07-.98s-.03-.66-.07-.98l2.11-1.65c.19-.15.24-.42.12-.64l-2-3.46c-.12-.22-.39-.3-.61-.22l-2.49 1c-.52-.4-1.08-.73-1.69-.98l-.38-2.65C14.46 2.18 14.25 2 14 2h-4c-.25 0-.46.18-.49.42l-.38 2.65c-.61.25-1.17.59-1.69.98l-2.49-1c-.23-.09-.49 0-.61.22l-2 3.46c-.13.22-.07.49.12.64l2.11 1.65c-.04.32-.07.65-.07.98s.03.66.07.98l-2.11 1.65c-.19.15-.24.42-.12.64l2 3.46c.12.22.39.3.61.22l2.49-1c.52.4 1.08.73 1.69.98l.38 2.65c.03.24.24.42.49.42h4c.25 0 .46-.18.49-.42l.38-2.65c.61-.25 1.17-.59 1.69-.98l2.49 1c.23.09.49 0 .61-.22l2-3.46c.12-.22.07-.49-.12-.64l-2.11-1.65zM12 15.5c-1.93 0-3.5-1.57-3.5-3.5s1.57-3.5 3.5-3.5 3.5 1.57 3.5 3.5-1.57 3.5-3.5 3.5z"/></svg>
+      </button>
+      <button id="dsSave" class="h-10 px-3 rounded-full bg-blue-600 text-white text-[13px] font-semibold whitespace-nowrap active:bg-blue-700">บันทึก</button>
+    </div>
+    <div id="dsHint" class="text-[12px] text-white/90 text-center py-1 bg-gray-700"></div>
+    <div id="dsArea" class="flex-1 relative overflow-hidden">
+      <div id="dsZoom">
+        <div id="dsPage" class="relative bg-white shadow-2xl overflow-hidden">
+          <div id="dsMap" class="absolute inset-0"></div>
+          <canvas id="dsCanvas" class="absolute inset-0"></canvas>
+        </div>
+      </div>
+      <div id="dsLabelBar" class="hidden absolute left-3 right-3 bottom-3 bg-white rounded-2xl shadow-lg p-2 flex items-center gap-2 z-10" style="margin-bottom: env(safe-area-inset-bottom);">
+        <div id="dsLabelName" class="flex-1 min-w-0 px-2 text-sm font-medium truncate"></div>
+        <button id="dsLabelHide" class="h-9 px-3 rounded-full bg-red-50 text-red-700 text-sm">ซ่อนป้ายนี้</button>
+        <button id="dsLabelAuto" class="h-9 px-3 rounded-full bg-gray-100 text-gray-800 text-sm">คืนอัตโนมัติ</button>
+        <button id="dsLabelClose" aria-label="ปิด" class="w-9 h-9 rounded-full grid place-items-center active:bg-gray-100">✕</button>
+      </div>
+      <div id="dsBackdrop" class="absolute inset-0 bg-black/20 hidden"></div>
+      <aside id="dsSheet" class="sheet closed absolute left-0 right-0 bottom-0 max-h-[75%] bg-white rounded-t-2xl shadow-2xl flex flex-col z-20">
+        <div class="flex items-center justify-between px-5 pt-3 pb-2">
+          <h2 class="text-lg font-semibold">ตั้งค่าภาพ</h2>
+          <button id="dsSheetClose" aria-label="ปิด" class="w-10 h-10 -mr-2 rounded-full grid place-items-center active:bg-gray-100">
+            <svg class="w-6 h-6 text-gray-600" viewBox="0 0 24 24" fill="currentColor"><path d="M19 6.4L17.6 5 12 10.6 6.4 5 5 6.4 10.6 12 5 17.6 6.4 19 12 13.4 17.6 19 19 17.6 13.4 12z"/></svg>
+          </button>
+        </div>
+        <div id="dsSheetBody" class="overflow-y-auto px-5 pb-6"></div>
+      </aside>
+    </div>
+  </div>
+
   <div id="toast" class="fixed left-1/2 -translate-x-1/2 safe-bottom mb-24 z-40 bg-gray-900 text-white text-sm rounded-lg px-4 py-2.5 shadow-lg hidden max-w-[90vw] text-center"></div>
 
   <!-- เปลี่ยนเลข ?v= ทุกครั้งที่แก้ไฟล์ .js เพื่อให้มือถือโหลดไฟล์ใหม่ -->
-  <script src="app.js?v=46"></script>
-  <script src="sheet.js?v=46"></script>
-  <script src="track.js?v=46"></script>
-  <script src="measure.js?v=46"></script>
+  <script src="app.js?v=49"></script>
+  <script src="sheet.js?v=49"></script>
+  <script src="track.js?v=49"></script>
+  <script src="measure.js?v=49"></script>
+  <script src="export-render.js?v=49"></script>
+  <script src="export.js?v=49"></script>
 </body>
 </html>

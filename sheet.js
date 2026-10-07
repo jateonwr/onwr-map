@@ -47,6 +47,7 @@ const SHEETS = [
     },
   },
 ];
+const sheetMeta = {};   // [layerId]: { date } — วันที่ข้อมูลจาก Sheet (ใช้พิมพ์บนภาพ export)
 const SHEET_COMMON = {
   displayHeaders: ['ชื่อแสดง', 'display'],   // คอลัมน์ชื่อที่จะแสดงแทนชื่อเดิม (เว้นว่าง = ใช้ชื่อเดิม)
   mapValues: 2,        // จำนวนค่า "อื่น ๆ" ที่แสดงเป็นป้ายใต้ชื่อ
@@ -125,7 +126,9 @@ for (const cfg of SHEETS) {
     const o = layer();
     const st = o && overlayState[o.id];
     if (!st || !st.data) return;
-    const { fieldIdx, displayIdx } = columns();
+    const { fieldIdx, displayIdx, dateIdx } = columns();
+    const dateRow = dateIdx > 0 ? S.rows.find(r => r[dateIdx]) : null;
+    sheetMeta[cfg.layer] = { date: dateRow ? dateRow[dateIdx] : null };
 
     // ใช้ค่าจาก Sheet แทนค่าเดิม (ช่องว่าง/ไม่ใช่ตัวเลข → ใช้ค่าเดิม)
     for (const f of st.data.features) {
