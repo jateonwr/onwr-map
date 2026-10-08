@@ -382,12 +382,11 @@ function renderSettingsPanel() {
     html = `<div class="flex flex-col gap-2">
         ${card('box:table', `<div class="flex-1 min-w-0 text-sm font-medium truncate">ตารางข้อมูลทุ่งรับน้ำ</div>${toggle('table.on', s.table.on)}`, tableBody)}
         ${card('box:legend', `<div class="flex-1 min-w-0 text-sm font-medium truncate">กล่องสัญลักษณ์</div>${toggle('legend.on', s.legend.on)}`, legendBody)}
-      </div>
-      <p class="text-xs text-gray-500 mt-3">ย้าย/ปรับขนาด: กด "จัดวาง" แล้วลากกล่อง หรือลากจุดที่มุมกล่อง</p>`;
+      </div>`;
   } else {
     const furn = [['logo', 'โลโก้ สทนช.'], ['north', 'ลูกศรทิศเหนือ'], ['scalebar', 'มาตราส่วน'], ['date', 'ข้อมูล ณ วันที่ (ในกล่องสัญลักษณ์)']]
       .map(([k, n]) => `<div class="flex items-center gap-3 min-h-[44px] border-b border-gray-100"><div class="flex-1 text-sm">${n}</div>${toggle(`furniture.${k}`, s.furniture[k])}</div>`).join('');
-    html = `${furn}<p class="text-xs text-gray-500 mt-2">ปรับขนาดโลโก้/ลูกศร/มาตราส่วน: กด "จัดวาง" แล้วลากจุดที่มุม</p>
+    html = `${furn}
       <button id="dsUnhide" class="mt-4 w-full h-10 rounded-xl bg-gray-100 text-sm text-gray-800 active:bg-gray-200"></button>
       <button id="dsResetBoxes" class="mt-2 w-full h-10 rounded-xl bg-gray-100 text-sm text-gray-800 active:bg-gray-200">คืนขนาด/ตำแหน่งกล่องทั้งหมด</button>`;
   }
