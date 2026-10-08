@@ -483,7 +483,6 @@ function toggleSaveMenu(open) {
   const m = $('dsSaveMenu');
   open = open ?? m.classList.contains('hidden');
   m.classList.toggle('hidden', !open);
-  if (open) m.querySelectorAll('[data-paper-label]').forEach(el => { el.textContent = ds.settings.paper; });
 }
 $('dsSave').onclick = e => { e.stopPropagation(); toggleSaveMenu(); };
 document.addEventListener('pointerdown', e => {
