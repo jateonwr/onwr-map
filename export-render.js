@@ -20,6 +20,17 @@ const LABEL_CLASS_NAMES = {
   'stn-label': 'รหัสสถานี', 'visit-label': 'จุดลงพื้นที่', 'prov-label': 'ชื่อจังหวัด',
 };
 const BOX_NAMES = { logo: 'โลโก้', table: 'ตาราง', legend: 'สัญลักษณ์', north: 'ลูกศรทิศเหนือ', scalebar: 'มาตราส่วน' };
+// คอลัมน์ตาราง 11 ทุ่ง (w = มม. บน A2 ที่ขนาดกล่อง 1×) — "name" แสดงเสมอ
+const TABLE_COLS = [
+  { key: 'no', w: 9, t: 'ลำดับที่', name: 'ลำดับที่' },
+  { key: 'name', w: 40, t: 'พื้นที่ลุ่มต่ำ', name: 'พื้นที่ลุ่มต่ำ' },
+  { key: 'pot', w: 21, t: 'ความจุศักยภาพ (ล้าน ลบ.ม.)', name: 'ความจุศักยภาพ' },
+  { key: 'cap', w: 21, t: 'ความจุประชาคม (ล้าน ลบ.ม.)', name: 'ความจุประชาคม' },
+  { key: 'now', w: 21, t: 'ปริมาณน้ำปัจจุบัน (ล้าน ลบ.ม.)', name: 'ปริมาณน้ำปัจจุบัน' },
+  { key: 'pct', w: 21, t: 'ร้อยละเทียบ ความจุประชาคม', name: 'ร้อยละเทียบความจุประชาคม' },
+];
+const BOX_SCALE_MIN = 0.3, BOX_SCALE_MAX = 4;
+const boxScale = (layout, type) => (layout.boxes[type] && layout.boxes[type].s) || 1;
 
 /* ---------- การตั้งค่า ---------- */
 const POLY_ICONS = ['area', 'lake', 'boundary'], LINE_ICONS = ['line', 'line-thick'];
@@ -33,8 +44,8 @@ function defaultExportSettings() {
     paper: 'A2',
     layers: Object.fromEntries(OVERLAYS.map(o => [o.id, { on: overlayState[o.id].visible, width: 1, iconSize: 1, ...layerColorDefaults(o) }])),
     labels: Object.fromEntries(Object.entries(LABEL_STYLES).map(([k, s]) => [k, { on: true, size: 1, color: s.color }])),
-    table: { on: true, font: 1, scale: 1 },
-    legend: { on: true, font: 1, scale: 1 },
+    table: { on: true, cols: Object.fromEntries(TABLE_COLS.map(c => [c.key, true])), totals: true },
+    legend: { on: true, items: Object.fromEntries(LEGEND_ORDER.map(id => [id, true])) },
     furniture: { logo: true, north: true, scalebar: true, date: true },
   };
 }
@@ -45,7 +56,10 @@ function mergeSettings(stored) {
   for (const grp of ['layers', 'labels']) {
     for (const k of Object.keys(d[grp])) out[grp][k] = { ...d[grp][k], ...(stored[grp] && stored[grp][k] || {}) };
   }
-  for (const grp of ['table', 'legend', 'furniture']) out[grp] = { ...d[grp], ...(stored[grp] || {}) };
+  const st = stored.table || {}, sl = stored.legend || {};
+  out.table = { on: st.on ?? d.table.on, totals: st.totals ?? d.table.totals, cols: { ...d.table.cols, ...(st.cols || {}), name: true } };
+  out.legend = { on: sl.on ?? d.legend.on, items: { ...d.legend.items, ...(sl.items || {}) } };
+  out.furniture = { ...d.furniture, ...(stored.furniture || {}) };
   return out;
 }
 const pointIconColors = s => ({ rect: s.layers['water-other'].fillColor, star: s.layers.visits.fillColor });
@@ -149,73 +163,85 @@ function labelFont(settings, cls, U) {
 
 /* ---------- ขนาดองค์ประกอบ ---------- */
 function tableSpec(ctx, settings, U) {
-  const sc = settings.table.scale, mm = v => v * U * sc;
+  const mm = v => v * U;
   const o = OVERLAYS.find(x => x.id === 'tung');
   const rows = [...overlayState.tung.data.features].sort((a, b) => tungOrderIndex(a) - tungOrderIndex(b));
-  const cols = [{ w: 9, t: 'ลำดับที่' }, { w: 40, t: 'พื้นที่ลุ่มต่ำ' }, { w: 21, t: 'ความจุศักยภาพ (ล้าน ลบ.ม.)' },
-    { w: 21, t: 'ความจุประชาคม (ล้าน ลบ.ม.)' }, { w: 21, t: 'ปริมาณน้ำปัจจุบัน (ล้าน ลบ.ม.)' }, { w: 21, t: 'ร้อยละเทียบ ความจุประชาคม' }]
-    .map(c => ({ w: mm(c.w), t: c.t }));
-  const fs = 3.1 * U * settings.table.font, rowH = Math.max(mm(6), fs * 1.7);
+  const cols = TABLE_COLS.filter(c => c.key === 'name' || settings.table.cols[c.key] !== false).map(c => ({ key: c.key, w: mm(c.w), t: c.t }));
+  const fs = 3.1 * U, rowH = Math.max(mm(6), fs * 1.7);
   const pct = (vol, cap) => cap > 0 && vol != null ? String(Math.round(vol / cap * 100)) : '-';
   const sum = list => ['Cap_Pot', 'Cap_MCM', 'Status_Now'].map(k => list.reduce((s, f) => s + (f.properties[k] || 0), 0));
+  const pick = v => cols.map(c => v[c.key]);
   const body = rows.map((f, i) => {
     const p = f.properties;
-    return [String(i + 1), displayName(o, p), fmtN(p.Cap_Pot), fmtN(p.Cap_MCM), fmtN(p.Status_Now), pct(p.Status_Now, p.Cap_MCM)];
+    return pick({ no: String(i + 1), name: displayName(o, p), pot: fmtN(p.Cap_Pot), cap: fmtN(p.Cap_MCM), now: fmtN(p.Status_Now), pct: pct(p.Status_Now, p.Cap_MCM) });
   });
-  const rest = rows.filter(f => normName(f.properties.AREA_NAME) !== normName('บางระกำ'));
-  for (const [label, list] of [[`รวม ${rest.length} ทุ่ง (ยกเว้นบางระกำ)`, rest], [`รวม ${rows.length} ทุ่ง`, rows]]) {
-    const [a, b, c] = sum(list);
-    body.push(['', label, fmtN(a), fmtN(b), fmtN(c), pct(c, b)]);
+  if (settings.table.totals) {
+    const rest = rows.filter(f => normName(f.properties.AREA_NAME) !== normName('บางระกำ'));
+    for (const [label, list] of [[`รวม ${rest.length} ทุ่ง (ยกเว้นบางระกำ)`, rest], [`รวม ${rows.length} ทุ่ง`, rows]]) {
+      const [a, b, c] = sum(list);
+      body.push(pick({ no: '', name: label, pot: fmtN(a), cap: fmtN(b), now: fmtN(c), pct: pct(c, b) }));
+    }
   }
-  const headLines = cols.map(c => wrapText(ctx, c.t, c.w - mm(2), fs, 700));
-  const headH = Math.max(...headLines.map(l => l.length)) * fs * 1.25 + mm(2);
+  // หัวตาราง: ย่อตัวอักษรเฉพาะคอลัมน์ที่คำยาวกว่าช่อง
+  const headFs = cols.map(c => {
+    const widest = Math.max(...c.t.split(' ').map(w => measure(ctx, w, fs, 700)));
+    return Math.min(fs, fs * (c.w - mm(1.5)) / widest);
+  });
+  const headLines = cols.map((c, i) => wrapText(ctx, c.t, c.w - mm(1.5), headFs[i], 700));
+  const headH = Math.max(...headLines.map((l, i) => l.length * headFs[i])) * 1.25 + mm(2);
   const w = cols.reduce((s, c) => s + c.w, 0);
-  return { cols, headLines, headH, rowH, fs, body, nData: rows.length, w, h: headH + body.length * rowH, pad: mm(1.5) };
+  return { cols, headLines, headFs, headH, rowH, fs, body, nData: rows.length, w, h: headH + body.length * rowH, pad: mm(1.5) };
 }
 function legendSpec(settings, U) {
-  const sc = settings.legend.scale, mm = v => v * U * sc;
-  const layers = LEGEND_ORDER.map(id => OVERLAYS.find(o => o.id === id)).filter(o => o && settings.layers[o.id].on && overlayState[o.id].data);
-  const fs = 3.4 * U * settings.legend.font, rowH = Math.max(mm(6.5), fs * 1.8);
+  const mm = v => v * U;
+  const layers = LEGEND_ORDER.map(id => OVERLAYS.find(o => o.id === id))
+    .filter(o => o && settings.layers[o.id].on && settings.legend.items[o.id] !== false && overlayState[o.id].data);
+  const fs = 3.4 * U, rowH = Math.max(mm(6.5), fs * 1.8);
   const dateText = settings.furniture.date
     ? `ข้อมูล ณ วันที่ ${(typeof sheetMeta !== 'undefined' && sheetMeta.tung && sheetMeta.tung.date) || new Date().toLocaleDateString('th-TH', { day: 'numeric', month: 'long', year: 'numeric' })}`
     : '';
   const w = Math.max(mm(62), fs * 0.55 * (dateText.length + 2));
-  return { layers, fs, rowH, w, h: mm(9) + layers.length * rowH + (dateText ? mm(8) : mm(3)), dateText, titleFs: 4.2 * U * settings.legend.font, pad: mm(3), icon: mm(5.5), textX: mm(11) };
+  return { layers, fs, rowH, w, h: mm(9) + layers.length * rowH + (dateText ? mm(8) : mm(3)), dateText, titleFs: 4.2 * U, pad: mm(3), icon: mm(5.5), textX: mm(11) };
 }
-function scalebarSpec(m, U) {
+function scalebarSpec(m, Ub) {
   const lat = m.getCenter().lat;
   const mPerPx = 40075016.686 * Math.cos(lat * Math.PI / 180) / Math.pow(2, m.getZoom() + 8);
-  const target = 40 * U * mPerPx;
-  const nice = [1, 2, 5, 10, 20, 25, 50, 100, 200].map(k => k * 1000).reduce((best, v) => Math.abs(v - target) < Math.abs(best - target) ? v : best, 1000);
-  return { km: nice / 1000, barW: nice / mPerPx, barH: 2 * U, w: nice / mPerPx + 6 * U, h: 12 * U };
+  const target = 40 * Ub * mPerPx;
+  const nice = [0.5, 1, 2, 5, 10, 20, 25, 50, 100, 200, 500].map(k => k * 1000).reduce((best, v) => Math.abs(v - target) < Math.abs(best - target) ? v : best, 1000);
+  return { km: nice / 1000, barW: nice / mPerPx, barH: 2 * Ub, w: nice / mPerPx + 6 * Ub, h: 12 * Ub, Ub };
 }
 
 /* ---------- จัดหน้า: กล่อง + ป้ายชื่อ (คืนตำแหน่งเป็น px ของ canvas) ---------- */
 function buildPage(ctx, m, U, settings, layout, refZoom) {
   const W = PAGE_MM[0] * U, H = PAGE_MM[1] * U, mm = v => v * U;
   const boxes = [];
+  // ขนาดกล่อง = ขนาดพื้นฐาน × s (ลากมุมปรับในหน้าจัดวาง) · ตำแหน่งเป็นมุมบนซ้าย (มม.)
   const place = (type, w, h, defX, defY) => {
     const p = layout.boxes[type];
-    const x = p ? mm(p.x) : mm(defX), y = p ? mm(p.y) : mm(defY);
-    const b = { type, x1: x, y1: y, x2: x + w, y2: y + h };
+    const x = p && p.x != null ? mm(p.x) : mm(defX), y = p && p.y != null ? mm(p.y) : mm(defY);
+    const b = { type, s: boxScale(layout, type), x1: x, y1: y, x2: x + w, y2: y + h };
     boxes.push(b);
     return b;
   };
+  const Ub = type => U * boxScale(layout, type);
   if (settings.furniture.logo && exportAssets.logo) {
-    const w = mm(34), h = w * exportAssets.logo.height / exportAssets.logo.width;
+    const w = 34 * Ub('logo'), h = w * exportAssets.logo.height / exportAssets.logo.width;
     place('logo', w, h, 10, 8);
   }
   if (settings.table.on && overlayState.tung.data) {
-    const spec = tableSpec(ctx, settings, U);
+    const spec = tableSpec(ctx, settings, Ub('table'));
     place('table', spec.w, spec.h, 10, 58).spec = spec;
   }
   if (settings.legend.on) {
-    const spec = legendSpec(settings, U);
+    const spec = legendSpec(settings, Ub('legend'));
     place('legend', spec.w, spec.h, 10, PAGE_MM[1] - 10 - spec.h / U).spec = spec;
   }
-  if (settings.furniture.north) place('north', mm(18), mm(22), PAGE_MM[0] - 10 - 18, 10);
+  if (settings.furniture.north) {
+    const u = Ub('north');
+    place('north', 18 * u, 22 * u, PAGE_MM[0] - 10 - 18 * u / U, 10);
+  }
   if (settings.furniture.scalebar) {
-    const spec = scalebarSpec(m, U);
+    const spec = scalebarSpec(m, Ub('scalebar'));
     place('scalebar', spec.w, spec.h, PAGE_MM[0] - 10 - spec.w / U, PAGE_MM[1] - 10 - spec.h / U).spec = spec;
   }
 
@@ -300,7 +326,7 @@ function buildPage(ctx, m, U, settings, layout, refZoom) {
 }
 
 /* ---------- วาด ---------- */
-function drawPage(ctx, m, U, settings, page, { editing = false, selected = null } = {}) {
+function drawPage(ctx, m, U, settings, page, { editing = false, selected = null, selectedBox = null, handlePx = 10 } = {}) {
   const mm = v => v * U;
   const { W, H } = page;
   ctx.strokeStyle = '#374151'; ctx.lineWidth = Math.max(1, mm(0.4));
@@ -309,10 +335,10 @@ function drawPage(ctx, m, U, settings, page, { editing = false, selected = null 
   for (const b of page.boxes) {
     const bw = b.x2 - b.x1, bh = b.y2 - b.y1;
     if (b.type === 'logo') ctx.drawImage(exportAssets.logo, b.x1, b.y1, bw, bh);
-    else if (b.type === 'table') drawTable(ctx, b, mm);
-    else if (b.type === 'legend') drawLegend(ctx, b, settings, mm);
-    else if (b.type === 'north') drawNorth(ctx, b, mm);
-    else if (b.type === 'scalebar') drawScalebar(ctx, b, mm);
+    else if (b.type === 'table') drawTable(ctx, b, v => v * U * b.s);
+    else if (b.type === 'legend') drawLegend(ctx, b, settings, v => v * U * b.s);
+    else if (b.type === 'north') drawNorth(ctx, b, v => v * U * b.s);
+    else if (b.type === 'scalebar') drawScalebar(ctx, b, v => v * U * b.s);
   }
   // attribution แผนที่ฐาน (มุมขวาล่าง)
   const attr = stripTags((BASEMAPS.find(b => b.id === activeBase) || {}).attribution);
@@ -337,9 +363,22 @@ function drawPage(ctx, m, U, settings, page, { editing = false, selected = null 
     ctx.save();
     ctx.setLineDash([mm(1.2), mm(0.8)]);
     for (const b of page.boxes) {
-      ctx.strokeStyle = 'rgba(37,99,235,.9)'; ctx.lineWidth = Math.max(1, mm(0.3));
+      const sel = b.type === selectedBox;
+      ctx.strokeStyle = sel ? 'rgba(220,38,38,1)' : 'rgba(37,99,235,.9)'; ctx.lineWidth = Math.max(1, mm(sel ? 0.5 : 0.3));
       ctx.strokeRect(b.x1, b.y1, b.x2 - b.x1, b.y2 - b.y1);
     }
+    // จุดจับ 4 มุม (ลากเพื่อปรับขนาด) — ขนาดคงที่บนจอ
+    ctx.setLineDash([]);
+    for (const b of page.boxes) {
+      const sel = b.type === selectedBox, hs = handlePx * (sel ? 1.25 : 1);
+      for (const [x, y] of boxCorners(b)) {
+        ctx.fillStyle = sel ? '#dc2626' : '#ffffff';
+        ctx.strokeStyle = sel ? '#ffffff' : '#2563eb'; ctx.lineWidth = Math.max(1, hs * 0.18);
+        ctx.fillRect(x - hs / 2, y - hs / 2, hs, hs);
+        ctx.strokeRect(x - hs / 2, y - hs / 2, hs, hs);
+      }
+    }
+    ctx.setLineDash([mm(1.2), mm(0.8)]);
     for (const l of page.labels) {
       if (l.hidden) continue;
       const sel = l.key === selected;
@@ -351,6 +390,10 @@ function drawPage(ctx, m, U, settings, page, { editing = false, selected = null 
   }
 }
 
+/* มุมกล่อง [nw, ne, sw, se] */
+const boxCorners = b => [[b.x1, b.y1], [b.x2, b.y1], [b.x1, b.y2], [b.x2, b.y2]];
+const CORNERS = ['nw', 'ne', 'sw', 'se'];
+
 function drawTable(ctx, b, mm) {
   const t = b.spec, x0 = b.x1, y0 = b.y1;
   ctx.fillStyle = 'rgba(255,255,255,0.96)'; ctx.fillRect(x0, y0, t.w, t.h);
@@ -359,8 +402,8 @@ function drawTable(ctx, b, mm) {
   let cx = x0;
   t.cols.forEach((c, i) => {
     ctx.strokeRect(cx, y0, c.w, t.headH);
-    ctx.fillStyle = '#111827'; ctx.font = `700 ${t.fs}px ${FONT_TH}`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-    const lines = t.headLines[i], lh = t.fs * 1.25;
+    ctx.fillStyle = '#111827'; ctx.font = `700 ${t.headFs[i]}px ${FONT_TH}`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    const lines = t.headLines[i], lh = t.headFs[i] * 1.25;
     lines.forEach((ln, k) => ctx.fillText(ln, cx + c.w / 2, y0 + t.headH / 2 + (k - (lines.length - 1) / 2) * lh));
     cx += c.w;
   });
@@ -371,8 +414,9 @@ function drawTable(ctx, b, mm) {
     t.cols.forEach((c, ci) => {
       ctx.strokeRect(x, y, c.w, t.rowH);
       ctx.fillStyle = '#111827'; ctx.font = `${total ? 700 : 500} ${t.fs}px ${FONT_TH}`; ctx.textBaseline = 'middle';
-      ctx.textAlign = ci === 1 ? 'left' : 'center';
-      ctx.fillText(r[ci], ci === 1 ? x + t.pad : x + c.w / 2, y + t.rowH / 2);
+      const left = c.key === 'name';
+      ctx.textAlign = left ? 'left' : 'center';
+      ctx.fillText(r[ci], left ? x + t.pad : x + c.w / 2, y + t.rowH / 2);
       x += c.w;
     });
   });
@@ -411,7 +455,7 @@ function drawNorth(ctx, b, mm) {
 }
 
 function drawScalebar(ctx, b, mm) {
-  const s = b.spec, bx = b.x1 + mm(3), by = b.y1 + mm(7);
+  const s = b.spec, bx = b.x1 + mm(3), by = b.y1 + mm(7);   // mm() ของกล่องนี้ = U × s
   ctx.fillStyle = 'rgba(255,255,255,0.9)'; ctx.fillRect(b.x1, b.y1, b.x2 - b.x1, b.y2 - b.y1);
   ctx.fillStyle = '#111827'; ctx.fillRect(bx, by, s.barW / 2, s.barH);
   ctx.strokeStyle = '#111827'; ctx.lineWidth = Math.max(0.5, mm(0.25)); ctx.strokeRect(bx, by, s.barW, s.barH);

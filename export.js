@@ -9,7 +9,7 @@
 const ds = {
   open: false, pm: null, settings: null, layout: null, mode: 'map',
   pageW: 0, pageH: 0, U: 1, ox: 0, oy: 0, zoom: 1, pan: { x: 0, y: 0 },
-  page: null, selected: null, raf: 0, busy: false,
+  page: null, selected: null, selectedBox: null, raf: 0, busy: false,
   sheetOpen: true, sheetH: 40, tab: 'layers', expanded: null,
 };
 const isWide = () => matchMedia('(min-width: 768px)').matches;
@@ -98,7 +98,7 @@ function renderPreview() {
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   ctx.clearRect(0, 0, ds.pageW, ds.pageH);
   ds.page = buildPage(ctx, ds.pm, ds.U, ds.settings, ds.layout, ds.pm.getZoom());
-  drawPage(ctx, ds.pm, ds.U, ds.settings, ds.page, { editing: ds.mode === 'edit', selected: ds.selected });
+  drawPage(ctx, ds.pm, ds.U, ds.settings, ds.page, { editing: ds.mode === 'edit', selected: ds.selected, selectedBox: ds.selectedBox, handlePx: 11 / ds.zoom });
   c.style.opacity = '1';
 }
 function scheduleRender() {
@@ -113,6 +113,7 @@ function setMode(mode) {
   $('dsArea').style.touchAction = mode === 'edit' ? 'none' : '';
   document.querySelectorAll('#designer [data-mode]').forEach(b => b.classList.toggle('seg-on', b.dataset.mode === mode));
   if (mode === 'map') { ds.zoom = 1; ds.pan = { x: 0, y: 0 }; applyZoomTransform(); }
+  ds.selectedBox = null;
   selectLabel(null);
   renderPreview();
 }
@@ -151,6 +152,13 @@ const toPage = (cx, cy) => {
 const distToBox = (p, x1, y1, x2, y2) => Math.hypot(Math.max(x1 - p.x, 0, p.x - x2), Math.max(y1 - p.y, 0, p.y - y2));
 function hitTest(p) {
   if (!ds.page) return null;
+  // จุดจับมุมกล่อง (กล่องที่เลือกอยู่ได้ก่อน)
+  const hr = 16 / ds.zoom;
+  const boxesOrdered = [...ds.page.boxes].sort((a, b) => (b.type === ds.selectedBox) - (a.type === ds.selectedBox));
+  for (const b of boxesOrdered) {
+    const cs = boxCorners(b);
+    for (let i = 0; i < 4; i++) if (Math.hypot(p.x - cs[i][0], p.y - cs[i][1]) <= hr) return { type: 'handle', box: b, corner: CORNERS[i] };
+  }
   const sel = ds.selected && ds.page.labels.find(l => l.key === ds.selected && !l.hidden);
   if (sel && distToBox(p, sel.x - sel.bw / 2, sel.y - sel.bh / 2, sel.x + sel.bw / 2, sel.y + sel.bh / 2) <= 24 / ds.zoom) return { type: 'label', label: sel };
   // ป้ายที่ใกล้ที่สุดภายใน 18 px บนจอ (ป้ายอยู่บนกล่อง จึงเช็กก่อน)
@@ -178,12 +186,20 @@ dsArea.addEventListener('pointerdown', e => {
   ptrs.set(e.pointerId, { x: e.clientX, y: e.clientY });
   if (ptrs.size === 1) {
     const p = toPage(e.clientX, e.clientY), hit = hitTest(p);
-    if (hit) {
+    if (hit && hit.type === 'handle') {
+      // ปรับขนาดคงสัดส่วน: มุมตรงข้ามอยู่กับที่
+      const b = hit.box, s0 = b.s || 1;
+      const opp = { nw: [b.x2, b.y2], ne: [b.x1, b.y2], sw: [b.x2, b.y1], se: [b.x1, b.y1] }[hit.corner];
+      gesture = { type: 'resize', hit, opp, baseW: (b.x2 - b.x1) / s0, baseH: (b.y2 - b.y1) / s0, moved: false };
+      ds.selectedBox = b.type;
+      if (ds.selected) selectLabel(null);
+    } else if (hit) {
       const orig = hit.type === 'box'
-        ? (ds.layout.boxes[hit.box.type] || { x: hit.box.x1 / ds.U, y: hit.box.y1 / ds.U })
+        ? { ...(ds.layout.boxes[hit.box.type] || {}), x: hit.box.x1 / ds.U, y: hit.box.y1 / ds.U }
         : pinOf(hit.label);
-      // ป้ายที่เลือกอยู่แล้ว: ลากได้ทันที ไม่ต้องรอระยะเริ่ม
-      gesture = { type: 'drag', hit, start: p, orig, moved: false, instant: hit.type === 'label' && hit.label.key === ds.selected };
+      // ป้ายที่เลือกอยู่แล้ว / กล่องที่เลือกอยู่แล้ว: ลากได้ทันที ไม่ต้องรอระยะเริ่ม
+      const instant = (hit.type === 'label' && hit.label.key === ds.selected) || (hit.type === 'box' && hit.box.type === ds.selectedBox);
+      gesture = { type: 'drag', hit, start: p, orig, moved: false, instant };
     } else gesture = { type: 'pan', start: { x: e.clientX, y: e.clientY }, pan0: { ...ds.pan } };
   } else if (ptrs.size === 2) {
     const [a, b] = [...ptrs.values()];
@@ -203,16 +219,26 @@ dsArea.addEventListener('pointermove', e => {
     ds.pan = { x: mid.x - r.left - ds.ox - qx * z, y: mid.y - r.top - ds.oy - qy * z };
     applyZoomTransform();
   } else if (gesture.type === 'pan') {
+    if (Math.hypot(e.clientX - gesture.start.x, e.clientY - gesture.start.y) > 4) gesture.moved = true;
     ds.pan = { x: gesture.pan0.x + e.clientX - gesture.start.x, y: gesture.pan0.y + e.clientY - gesture.start.y };
     applyZoomTransform();
+  } else if (gesture.type === 'resize') {
+    const p = toPage(e.clientX, e.clientY), g = gesture, c = g.hit.corner;
+    const s = Math.min(BOX_SCALE_MAX, Math.max(BOX_SCALE_MIN, Math.max(Math.abs(p.x - g.opp[0]) / g.baseW, Math.abs(p.y - g.opp[1]) / g.baseH)));
+    const w = g.baseW * s, h = g.baseH * s;
+    const x1 = c === 'nw' || c === 'sw' ? g.opp[0] - w : g.opp[0];
+    const y1 = c === 'nw' || c === 'ne' ? g.opp[1] - h : g.opp[1];
+    ds.layout.boxes[g.hit.box.type] = { x: x1 / ds.U, y: y1 / ds.U, s };
+    g.moved = true;
+    scheduleRender();
   } else if (gesture.type === 'drag') {
     const p = toPage(e.clientX, e.clientY);
     const dx = p.x - gesture.start.x, dy = p.y - gesture.start.y;
     if (!gesture.moved && !gesture.instant && Math.hypot(dx, dy) * ds.zoom < 4) return;
     gesture.moved = true;
     if (gesture.hit.type === 'box') {
-      ds.layout.boxes[gesture.hit.box.type] = { x: gesture.orig.x + dx / ds.U, y: gesture.orig.y + dy / ds.U };
-      ds.dragging = gesture.hit.box.type;
+      ds.layout.boxes[gesture.hit.box.type] = { ...gesture.orig, x: gesture.orig.x + dx / ds.U, y: gesture.orig.y + dy / ds.U };
+      ds.selectedBox = gesture.hit.box.type;
     } else {
       ds.layout.labels[gesture.hit.label.key] = { ...gesture.orig, dx: gesture.orig.dx + dx / ds.U, dy: gesture.orig.dy + dy / ds.U };
       ds.selected = gesture.hit.label.key;
@@ -223,11 +249,12 @@ dsArea.addEventListener('pointermove', e => {
 function endPointer(e) {
   if (!ptrs.has(e.pointerId)) return;
   ptrs.delete(e.pointerId);
-  ds.dragging = null;
+  if (gesture && gesture.type === 'resize') { if (gesture.moved) saveExportState(); renderPreview(); }
   if (gesture && gesture.type === 'drag') {
-    if (gesture.moved) { saveExportState(); if (gesture.hit.type === 'label') selectLabel(gesture.hit.label.key); else renderPreview(); }
-    else if (gesture.hit.type === 'label') selectLabel(gesture.hit.label.key);
-    else selectLabel(null);
+    if (gesture.hit.type === 'label') { ds.selectedBox = null; if (gesture.moved) saveExportState(); selectLabel(gesture.hit.label.key); }
+    else { ds.selectedBox = gesture.hit.box.type; if (gesture.moved) saveExportState(); selectLabel(null); }
+  } else if (gesture && gesture.type === 'pan' && !gesture.moved) {
+    if (ds.selectedBox) { ds.selectedBox = null; renderPreview(); }
   }
   gesture = ptrs.size === 1 ? { type: 'pan', start: { ...[...ptrs.values()][0] }, pan0: { ...ds.pan } } : null;
 }
@@ -339,19 +366,36 @@ function renderSettingsPanel() {
         slider(`labels.${cls}.size`, l.size, 0.5, 2, 0.05, 'ขนาด'));
     }).join('')}</div>`;
   } else if (ds.tab === 'boxes') {
-    const box = (key, name) => card(`box:${key}`,
-      `<div class="flex-1 min-w-0 text-sm font-medium truncate">${name}</div>${toggle(`${key}.on`, s[key].on)}`,
-      `${slider(`${key}.font`, s[key].font, 0.6, 1.6, 0.05, 'ตัวอักษร')}${slider(`${key}.scale`, s[key].scale, 0.6, 1.6, 0.05, 'ขนาดกล่อง')}`);
-    html = `<div class="flex flex-col gap-2">${box('table', 'ตารางข้อมูลทุ่งรับน้ำ')}${box('legend', 'กล่องสัญลักษณ์')}</div>
-      <p class="text-xs text-gray-500 mt-3">ย้ายตำแหน่งตาราง/กล่องได้ในโหมด "จัดวาง" โดยลากบนตัวอย่าง</p>`;
+    const check = (path, on, label, extra = '', disabled = false) => `
+      <label class="flex items-center gap-3 min-h-[38px] text-sm ${disabled ? 'opacity-50' : ''}">
+        <input type="checkbox" data-path="${path}" ${on ? 'checked' : ''} ${disabled ? 'disabled' : ''} class="w-5 h-5 accent-blue-600 flex-none">
+        ${extra}<span class="flex-1 min-w-0">${label}</span></label>`;
+    const tableBody = TABLE_COLS.map(c => c.key === 'name'
+      ? check('table.cols.name', true, `${c.name} <span class="text-xs text-gray-400">(แสดงเสมอ)</span>`, '', true)
+      : check(`table.cols.${c.key}`, s.table.cols[c.key] !== false, c.name)).join('') +
+      `<div class="border-t border-gray-100 mt-1 pt-1">${check('table.totals', s.table.totals, 'แถวรวม (10 ทุ่ง / 11 ทุ่ง)')}</div>`;
+    const legendBody = LEGEND_ORDER.map(id => OVERLAYS.find(o => o.id === id)).filter(Boolean).map(o => {
+      const ls = s.layers[o.id];
+      const icon = `<span class="w-6 h-6 flex-none grid place-items-center">${layerIcon({ icon: o.icon, swatch: ls.fillColor || ls.lineColor || o.swatch, outline: ls.lineColor || o.outline }, 20)}</span>`;
+      return check(`legend.items.${o.id}`, s.legend.items[o.id] !== false, ls.on ? o.name : `${o.name} <span class="text-xs text-gray-400">(เลเยอร์ปิดอยู่)</span>`, icon, !ls.on);
+    }).join('');
+    html = `<div class="flex flex-col gap-2">
+        ${card('box:table', `<div class="flex-1 min-w-0 text-sm font-medium truncate">ตารางข้อมูลทุ่งรับน้ำ</div>${toggle('table.on', s.table.on)}`, tableBody)}
+        ${card('box:legend', `<div class="flex-1 min-w-0 text-sm font-medium truncate">กล่องสัญลักษณ์</div>${toggle('legend.on', s.legend.on)}`, legendBody)}
+      </div>
+      <p class="text-xs text-gray-500 mt-3">ย้าย/ปรับขนาด: กด "จัดวาง" แล้วลากกล่อง หรือลากจุดที่มุมกล่อง</p>`;
   } else {
     const furn = [['logo', 'โลโก้ สทนช.'], ['north', 'ลูกศรทิศเหนือ'], ['scalebar', 'มาตราส่วน'], ['date', 'ข้อมูล ณ วันที่ (ในกล่องสัญลักษณ์)']]
       .map(([k, n]) => `<div class="flex items-center gap-3 min-h-[44px] border-b border-gray-100"><div class="flex-1 text-sm">${n}</div>${toggle(`furniture.${k}`, s.furniture[k])}</div>`).join('');
-    html = `${furn}<button id="dsUnhide" class="mt-4 w-full h-10 rounded-xl bg-gray-100 text-sm text-gray-800 active:bg-gray-200"></button>`;
+    html = `${furn}<p class="text-xs text-gray-500 mt-2">ปรับขนาดโลโก้/ลูกศร/มาตราส่วน: กด "จัดวาง" แล้วลากจุดที่มุม</p>
+      <button id="dsUnhide" class="mt-4 w-full h-10 rounded-xl bg-gray-100 text-sm text-gray-800 active:bg-gray-200"></button>
+      <button id="dsResetBoxes" class="mt-2 w-full h-10 rounded-xl bg-gray-100 text-sm text-gray-800 active:bg-gray-200">คืนขนาด/ตำแหน่งกล่องทั้งหมด</button>`;
   }
   $('dsSheetBody').innerHTML = html;
   $('dsSheetBody').scrollTop = 0;
   renderHiddenCount();
+  const rb = $('dsResetBoxes');
+  if (rb) rb.onclick = () => { ds.layout.boxes = {}; ds.selectedBox = null; saveExportState(); renderPreview(); };
   const un = $('dsUnhide');
   if (un) un.onclick = () => {
     for (const [k, v] of Object.entries(ds.layout.labels)) { if (v.hidden) { delete v.hidden; if (v.dx == null) delete ds.layout.labels[k]; } }
