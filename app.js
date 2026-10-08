@@ -577,11 +577,16 @@ async function shareOrDownload(file, title) {
     try { await navigator.share({ files: [file], title }); return; }
     catch (err) { if (err.name === 'AbortError') return; }
   }
+  downloadFile(file);
+}
+
+/* ดาวน์โหลดไฟล์ทันที (ไม่เปิดหน้าแชร์) */
+function downloadFile(file) {
   const a = document.createElement('a');
   a.href = URL.createObjectURL(file);
   a.download = file.name;
   document.body.appendChild(a); a.click(); a.remove();
-  setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+  setTimeout(() => URL.revokeObjectURL(a.href), 30000);
 }
 
 /* ขนาดตัวอักษรของป้ายเปลี่ยนตามระดับซูม: ซูม 7 → 0.75×, 9 → 0.9×, 11 → 1×, 13+ → 1.2× */

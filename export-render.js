@@ -474,8 +474,22 @@ function waitIdle(m, prog, timeout = 90000) {
   });
 }
 
-/* คืน File (PNG) · center/zoom/pageW = ของแผนที่ตัวอย่าง → ภาพจริงฉายจุดเหมือนตัวอย่างทุกประการ */
-async function renderFinal({ settings, layout, center, zoom, pageW, prog, dpi = EXPORT_DPI }) {
+/* jsPDF โหลดเมื่อใช้ครั้งแรก (ไม่ทำให้แอปหลักช้า) */
+let jsPdfPromise = null;
+function loadJsPdf() {
+  if (window.jspdf) return Promise.resolve(window.jspdf);
+  if (!jsPdfPromise) jsPdfPromise = new Promise((resolve, reject) => {
+    const sc = document.createElement('script');
+    sc.src = 'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js';
+    sc.onload = () => window.jspdf ? resolve(window.jspdf) : reject(new Error('jspdf'));
+    sc.onerror = () => { jsPdfPromise = null; reject(new Error('jspdf-load')); };
+    document.head.appendChild(sc);
+  });
+  return jsPdfPromise;
+}
+
+/* คืน File (PNG หรือ PDF) · center/zoom/pageW = ของแผนที่ตัวอย่าง → ภาพจริงฉายจุดเหมือนตัวอย่างทุกประการ */
+async function renderFinal({ settings, layout, center, zoom, pageW, prog, dpi = EXPORT_DPI, format = 'png' }) {
   const [mmW, mmH] = PAPER[settings.paper];
   const W = mmToPx(mmW, dpi), H = mmToPx(mmH, dpi);
   const U = W / PAGE_MM[0];
@@ -511,17 +525,24 @@ async function renderFinal({ settings, layout, center, zoom, pageW, prog, dpi = 
     if (prog && prog.cancelled) throw new Error('cancelled');
 
     if (prog) prog.set('บันทึกไฟล์…');
+    const d = new Date(), pad = n => String(n).padStart(2, '0');
+    const base = `map-${settings.paper}-${d.getFullYear()}${pad(d.getMonth() + 1)}${pad(d.getDate())}-${pad(d.getHours())}${pad(d.getMinutes())}`;
+    if (format === 'pdf') {
+      // หน้า PDF = ขนาดกระดาษจริง (พิมพ์แล้วได้สเกลถูก) · ภาพใส่เป็น JPEG ให้ไฟล์ไม่ใหญ่เกิน
+      const { jsPDF } = await loadJsPdf();
+      const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: [mmW, mmH], compress: true });
+      doc.addImage(canvas.toDataURL('image/jpeg', 0.92), 'JPEG', 0, 0, mmW, mmH, undefined, 'FAST');
+      return new File([doc.output('blob')], base + '.pdf', { type: 'application/pdf' });
+    }
     const blob = await new Promise(r => canvas.toBlob(r, 'image/png'));
     if (!blob) throw new Error('toBlob');
-    const d = new Date(), pad = n => String(n).padStart(2, '0');
-    const name = `map-${settings.paper}-${d.getFullYear()}${pad(d.getMonth() + 1)}${pad(d.getDate())}-${pad(d.getHours())}${pad(d.getMinutes())}.png`;
-    return new File([blob], name, { type: 'image/png' });
+    return new File([blob], base + '.png', { type: 'image/png' });
   } catch (err) {
-    if (err && err.message !== 'cancelled' && dpi > 100) {   // หน่วยความจำ/WebGL ไม่พอ → ลดความละเอียด
+    if (err && !['cancelled', 'jspdf', 'jspdf-load'].includes(err.message) && dpi > 100) {   // หน่วยความจำ/WebGL ไม่พอ → ลดความละเอียด
       console.warn('export: retry at 100 dpi', err);
       if (em) { try { em.remove(); } catch {} em = null; }
       if (box) { box.remove(); box = null; }
-      return renderFinal({ settings, layout, center, zoom, pageW, prog, dpi: 100 });
+      return renderFinal({ settings, layout, center, zoom, pageW, prog, dpi: 100, format });
     }
     throw err;
   } finally {

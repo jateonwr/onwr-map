@@ -479,22 +479,42 @@ function showProgress(title) {
   return st;
 }
 
-$('dsSave').onclick = async () => {
+/* ปุ่มบันทึก → เมนู PNG / PDF → ดาวน์โหลดทันที */
+function toggleSaveMenu(open) {
+  const m = $('dsSaveMenu');
+  open = open ?? m.classList.contains('hidden');
+  m.classList.toggle('hidden', !open);
+  if (open) m.querySelectorAll('[data-paper-label]').forEach(el => { el.textContent = ds.settings.paper; });
+}
+$('dsSave').onclick = e => { e.stopPropagation(); toggleSaveMenu(); };
+document.addEventListener('pointerdown', e => {
+  if (!$('dsSaveMenu').classList.contains('hidden') && !e.target.closest('#dsSaveMenu, #dsSave')) toggleSaveMenu(false);
+});
+document.addEventListener('keydown', e => { if (e.key === 'Escape') toggleSaveMenu(false); });
+$('dsSaveMenu').addEventListener('click', e => {
+  const b = e.target.closest('[data-format]');
+  if (!b) return;
+  toggleSaveMenu(false);
+  saveExport(b.dataset.format);
+});
+
+async function saveExport(format) {
   if (!ds.pm || ds.busy) return;
   ds.busy = true;
   selectLabel(null);
-  const prog = showProgress(`กำลังสร้างภาพ ${ds.settings.paper}`);
+  const prog = showProgress(`กำลังสร้าง${format === 'pdf' ? ' PDF' : 'ภาพ'} ${ds.settings.paper}`);
   try {
-    const file = await renderFinal({ settings: ds.settings, layout: ds.layout, center: ds.pm.getCenter(), zoom: ds.pm.getZoom(), pageW: ds.pageW, prog });
+    const file = await renderFinal({ settings: ds.settings, layout: ds.layout, center: ds.pm.getCenter(), zoom: ds.pm.getZoom(), pageW: ds.pageW, prog, format });
     prog.close();
-    await shareOrDownload(file, `แผนที่ ${ds.settings.paper}`);
+    downloadFile(file);
   } catch (err) {
     prog.close();
-    if (!(err && err.message === 'cancelled')) {
-      console.error('export', err);
-      toast('สร้างภาพไม่สำเร็จ — ลองใช้ขนาด A3 หรือปิดบางชั้นข้อมูล');
-    }
+    if (err && err.message === 'cancelled') return;
+    console.error('export', err);
+    toast(err && String(err.message).startsWith('jspdf')
+      ? 'สร้าง PDF ไม่ได้ (ต้องต่ออินเทอร์เน็ต) — ลองบันทึกเป็น PNG'
+      : 'สร้างภาพไม่สำเร็จ — ลองใช้ขนาด A3 หรือปิดบางชั้นข้อมูล');
   } finally {
     ds.busy = false;
   }
-};
+}
