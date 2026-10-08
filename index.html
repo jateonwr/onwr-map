@@ -112,9 +112,13 @@
     #designer .seg { display: flex; background: #f3f4f6; border-radius: 999px; padding: 2px; }
     #designer .seg button { height: 32px; padding: 0 9px; border-radius: 999px; font-size: 12px; font-weight: 600; color: #374151; white-space: nowrap; }
     #designer .seg button.seg-on { background: #1a73e8; color: #fff; }
+    #designer .seg.justify-between button { flex: 1; padding: 0 4px; }
+    #designer #dsSettings.seg-on { background: #1a73e8; color: #fff; }
     #dsArea { background: #4b5563; }
     #dsZoom { position: absolute; transform-origin: 0 0; }
     #dsCanvas { pointer-events: none; transition: opacity .15s; }
+    #dsSheet { height: var(--sh, 40%); }
+    @media (min-width: 768px) { #dsSheet { height: auto; } }
 
     /* สวิตช์เปิด/ปิด */
     .switch { position: relative; width: 44px; height: 26px; flex: none; }
@@ -276,7 +280,7 @@
   <div id="backdrop" class="fixed inset-0 z-20 bg-black/20 hidden md:!hidden"></div>
   <!-- หน้าจัดวางภาพแผนที่ A2/A3 -->
   <div id="designer" class="hidden fixed inset-0 z-40 flex flex-col bg-gray-600">
-    <div class="flex items-center gap-1.5 px-1.5 bg-white shadow-md" style="padding-top: env(safe-area-inset-top); min-height: calc(env(safe-area-inset-top) + 56px);">
+    <div class="flex items-center gap-1.5 px-1.5 bg-white shadow-md flex-none" style="padding-top: env(safe-area-inset-top); min-height: calc(env(safe-area-inset-top) + 56px);">
       <button id="dsClose" aria-label="ปิด" class="w-9 h-10 rounded-full grid place-items-center active:bg-gray-100">
         <svg class="w-6 h-6 text-gray-700" viewBox="0 0 24 24" fill="currentColor"><path d="M19 6.4L17.6 5 12 10.6 6.4 5 5 6.4 10.6 12 5 17.6 6.4 19 12 13.4 17.6 19 19 17.6 13.4 12z"/></svg>
       </button>
@@ -286,34 +290,48 @@
       <button id="dsReset" aria-label="รีเซ็ต" class="w-9 h-10 rounded-full grid place-items-center active:bg-gray-100">
         <svg class="w-5 h-5 text-gray-700" viewBox="0 0 24 24" fill="currentColor"><path d="M12 5V2L7 6l5 4V7c3.31 0 6 2.69 6 6s-2.69 6-6 6-6-2.69-6-6H4c0 4.42 3.58 8 8 8s8-3.58 8-8-3.58-8-8-8z"/></svg>
       </button>
-      <button id="dsSettings" aria-label="ตั้งค่า" class="w-9 h-10 rounded-full grid place-items-center active:bg-gray-100">
-        <svg class="w-5 h-5 text-gray-700" viewBox="0 0 24 24" fill="currentColor"><path d="M19.43 12.98c.04-.32.07-.64.07-.98s-.03-.66-.07-.98l2.11-1.65c.19-.15.24-.42.12-.64l-2-3.46c-.12-.22-.39-.3-.61-.22l-2.49 1c-.52-.4-1.08-.73-1.69-.98l-.38-2.65C14.46 2.18 14.25 2 14 2h-4c-.25 0-.46.18-.49.42l-.38 2.65c-.61.25-1.17.59-1.69.98l-2.49-1c-.23-.09-.49 0-.61.22l-2 3.46c-.13.22-.07.49.12.64l2.11 1.65c-.04.32-.07.65-.07.98s.03.66.07.98l-2.11 1.65c-.19.15-.24.42-.12.64l2 3.46c.12.22.39.3.61.22l2.49-1c.52.4 1.08.73 1.69.98l.38 2.65c.03.24.24.42.49.42h4c.25 0 .46-.18.49-.42l.38-2.65c.61-.25 1.17-.59 1.69-.98l2.49 1c.23.09.49 0 .61-.22l2-3.46c.12-.22.07-.49-.12-.64l-2.11-1.65zM12 15.5c-1.93 0-3.5-1.57-3.5-3.5s1.57-3.5 3.5-3.5 3.5 1.57 3.5 3.5-1.57 3.5-3.5 3.5z"/></svg>
+      <button id="dsSettings" aria-label="ตั้งค่า" aria-pressed="false" class="w-9 h-9 rounded-full grid place-items-center active:bg-gray-100">
+        <svg class="w-5 h-5" viewBox="0 0 24 24" fill="currentColor"><path d="M19.43 12.98c.04-.32.07-.64.07-.98s-.03-.66-.07-.98l2.11-1.65c.19-.15.24-.42.12-.64l-2-3.46c-.12-.22-.39-.3-.61-.22l-2.49 1c-.52-.4-1.08-.73-1.69-.98l-.38-2.65C14.46 2.18 14.25 2 14 2h-4c-.25 0-.46.18-.49.42l-.38 2.65c-.61.25-1.17.59-1.69.98l-2.49-1c-.23-.09-.49 0-.61.22l-2 3.46c-.13.22-.07.49.12.64l2.11 1.65c-.04.32-.07.65-.07.98s.03.66.07.98l-2.11 1.65c-.19.15-.24.42-.12.64l2 3.46c.12.22.39.3.61.22l2.49-1c.52.4 1.08.73 1.69.98l.38 2.65c.03.24.24.42.49.42h4c.25 0 .46-.18.49-.42l.38-2.65c.61-.25 1.17-.59 1.69-.98l2.49 1c.23.09.49 0 .61-.22l2-3.46c.12-.22.07-.49-.12-.64l-2.11-1.65zM12 15.5c-1.93 0-3.5-1.57-3.5-3.5s1.57-3.5 3.5-3.5 3.5 1.57 3.5 3.5-1.57 3.5-3.5 3.5z"/></svg>
       </button>
       <button id="dsSave" class="h-10 px-3 rounded-full bg-blue-600 text-white text-[13px] font-semibold whitespace-nowrap active:bg-blue-700">บันทึก</button>
     </div>
-    <div id="dsHint" class="text-[12px] text-white/90 text-center py-1 bg-gray-700"></div>
-    <div id="dsArea" class="flex-1 relative overflow-hidden">
-      <div id="dsZoom">
-        <div id="dsPage" class="relative bg-white shadow-2xl overflow-hidden">
-          <div id="dsMap" class="absolute inset-0"></div>
-          <canvas id="dsCanvas" class="absolute inset-0"></canvas>
+    <div id="dsHint" class="text-[11px] text-white/90 text-center py-0.5 bg-gray-700 flex-none"></div>
+
+    <!-- ตัวอย่าง (ซ้าย/บน) + แผงตั้งค่า (ขวาบนแท็บเล็ต / ล่างบนมือถือ) -->
+    <div id="dsBody" class="flex-1 min-h-0 flex flex-col md:flex-row">
+      <div id="dsArea" class="flex-1 min-h-0 relative overflow-hidden">
+        <div id="dsZoom">
+          <div id="dsPage" class="relative bg-white shadow-2xl overflow-hidden">
+            <div id="dsMap" class="absolute inset-0"></div>
+            <canvas id="dsCanvas" class="absolute inset-0"></canvas>
+          </div>
+        </div>
+        <div id="dsLabelBar" class="hidden absolute left-2 right-2 top-2 bg-white rounded-2xl shadow-lg p-1.5 flex items-center gap-1.5 z-10">
+          <div id="dsLabelName" class="flex-1 min-w-0 px-2 text-sm font-medium truncate"></div>
+          <button id="dsLabelHide" class="h-9 px-3 rounded-full bg-red-50 text-red-700 text-[13px] whitespace-nowrap">ซ่อนป้ายนี้</button>
+          <button id="dsLabelAuto" class="h-9 px-3 rounded-full bg-gray-100 text-gray-800 text-[13px] whitespace-nowrap">คืนอัตโนมัติ</button>
+          <button id="dsLabelClose" aria-label="ปิด" class="w-9 h-9 rounded-full grid place-items-center active:bg-gray-100">✕</button>
+        </div>
+        <div id="dsZoomBtns" class="absolute right-2 bottom-2 z-10 flex flex-col rounded-full bg-white shadow-md overflow-hidden">
+          <button id="dsZoomIn" aria-label="ขยายตัวอย่าง" class="w-10 h-10 grid place-items-center active:bg-gray-100 text-gray-700">
+            <svg class="w-5 h-5" viewBox="0 0 24 24" fill="currentColor"><path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/></svg></button>
+          <div class="h-px mx-2 bg-gray-200"></div>
+          <button id="dsZoomOut" aria-label="ย่อตัวอย่าง" class="w-10 h-10 grid place-items-center active:bg-gray-100 text-gray-700">
+            <svg class="w-5 h-5" viewBox="0 0 24 24" fill="currentColor"><path d="M19 13H5v-2h14v2z"/></svg></button>
+          <div class="h-px mx-2 bg-gray-200"></div>
+          <button id="dsZoomFit" aria-label="พอดีจอ" class="w-10 h-10 grid place-items-center active:bg-gray-100 text-gray-700">
+            <svg class="w-5 h-5" viewBox="0 0 24 24" fill="currentColor"><path d="M5 15H3v4c0 1.1.9 2 2 2h4v-2H5v-4zM5 5h4V3H5c-1.1 0-2 .9-2 2v4h2V5zm14-2h-4v2h4v4h2V5c0-1.1-.9-2-2-2zm0 16h-4v2h4c1.1 0 2-.9 2-2v-4h-2v4z"/></svg></button>
         </div>
       </div>
-      <div id="dsLabelBar" class="hidden absolute left-3 right-3 bottom-3 bg-white rounded-2xl shadow-lg p-2 flex items-center gap-2 z-10" style="margin-bottom: env(safe-area-inset-bottom);">
-        <div id="dsLabelName" class="flex-1 min-w-0 px-2 text-sm font-medium truncate"></div>
-        <button id="dsLabelHide" class="h-9 px-3 rounded-full bg-red-50 text-red-700 text-sm">ซ่อนป้ายนี้</button>
-        <button id="dsLabelAuto" class="h-9 px-3 rounded-full bg-gray-100 text-gray-800 text-sm">คืนอัตโนมัติ</button>
-        <button id="dsLabelClose" aria-label="ปิด" class="w-9 h-9 rounded-full grid place-items-center active:bg-gray-100">✕</button>
-      </div>
-      <div id="dsBackdrop" class="absolute inset-0 bg-black/20 hidden"></div>
-      <aside id="dsSheet" class="sheet closed absolute left-0 right-0 bottom-0 max-h-[75%] bg-white rounded-t-2xl shadow-2xl flex flex-col z-20">
-        <div class="flex items-center justify-between px-5 pt-3 pb-2">
-          <h2 class="text-lg font-semibold">ตั้งค่าภาพ</h2>
-          <button id="dsSheetClose" aria-label="ปิด" class="w-10 h-10 -mr-2 rounded-full grid place-items-center active:bg-gray-100">
-            <svg class="w-6 h-6 text-gray-600" viewBox="0 0 24 24" fill="currentColor"><path d="M19 6.4L17.6 5 12 10.6 6.4 5 5 6.4 10.6 12 5 17.6 6.4 19 12 13.4 17.6 19 19 17.6 13.4 12z"/></svg>
+      <aside id="dsSheet" class="flex-none flex flex-col bg-white min-h-0 border-t border-gray-200 md:border-t-0 md:border-l md:w-[360px]">
+        <div id="dsHandle" class="md:hidden py-2 grid place-items-center cursor-row-resize touch-none"><div class="w-10 h-1.5 rounded-full bg-gray-300"></div></div>
+        <div class="flex items-center gap-2 px-3 pb-1 md:pt-3">
+          <div id="dsTabs" class="seg flex-1 justify-between"></div>
+          <button id="dsSheetClose" aria-label="ปิดแผง" class="w-9 h-9 rounded-full grid place-items-center active:bg-gray-100 flex-none">
+            <svg class="w-5 h-5 text-gray-600" viewBox="0 0 24 24" fill="currentColor"><path d="M19 6.4L17.6 5 12 10.6 6.4 5 5 6.4 10.6 12 5 17.6 6.4 19 12 13.4 17.6 19 19 17.6 13.4 12z"/></svg>
           </button>
         </div>
-        <div id="dsSheetBody" class="overflow-y-auto px-5 pb-6"></div>
+        <div id="dsSheetBody" class="flex-1 min-h-0 overflow-y-auto px-3 pb-4 pt-2"></div>
       </aside>
     </div>
   </div>
@@ -321,11 +339,11 @@
   <div id="toast" class="fixed left-1/2 -translate-x-1/2 safe-bottom mb-24 z-40 bg-gray-900 text-white text-sm rounded-lg px-4 py-2.5 shadow-lg hidden max-w-[90vw] text-center"></div>
 
   <!-- เปลี่ยนเลข ?v= ทุกครั้งที่แก้ไฟล์ .js เพื่อให้มือถือโหลดไฟล์ใหม่ -->
-  <script src="app.js?v=49"></script>
-  <script src="sheet.js?v=49"></script>
-  <script src="track.js?v=49"></script>
-  <script src="measure.js?v=49"></script>
-  <script src="export-render.js?v=49"></script>
-  <script src="export.js?v=49"></script>
+  <script src="app.js?v=50"></script>
+  <script src="sheet.js?v=50"></script>
+  <script src="track.js?v=50"></script>
+  <script src="measure.js?v=50"></script>
+  <script src="export-render.js?v=50"></script>
+  <script src="export.js?v=50"></script>
 </body>
 </html>
