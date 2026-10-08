@@ -112,9 +112,6 @@ function setMode(mode) {
   $('dsMap').style.pointerEvents = mode === 'edit' ? 'none' : '';
   $('dsArea').style.touchAction = mode === 'edit' ? 'none' : '';
   document.querySelectorAll('#designer [data-mode]').forEach(b => b.classList.toggle('seg-on', b.dataset.mode === mode));
-  $('dsHint').textContent = mode === 'edit'
-    ? 'ลากป้าย/กล่องเพื่อย้าย · แตะป้ายเพื่อซ่อน · บีบหรือกด ＋ เพื่อขยายตัวอย่าง'
-    : 'เลื่อน/ซูมแผนที่ให้ได้มุมมองที่ต้องการ · กด "จัดวาง" เพื่อย้ายป้าย';
   if (mode === 'map') { ds.zoom = 1; ds.pan = { x: 0, y: 0 }; applyZoomTransform(); }
   selectLabel(null);
   renderPreview();
