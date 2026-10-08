@@ -30,6 +30,8 @@ const TABLE_COLS = [
   { key: 'pct', w: 21, t: 'ร้อยละเทียบ ความจุประชาคม', name: 'ร้อยละเทียบความจุประชาคม' },
 ];
 const BOX_SCALE_MIN = 0.3, BOX_SCALE_MAX = 4;
+const PAGE_MARGIN_MM = 8;            // ขอบกระดาษสีขาว 4 ด้าน (มม. บน A2)
+const EDGE_MM = PAGE_MARGIN_MM + 4;  // ตำแหน่งเริ่มต้นของโลโก้/ตาราง/สัญลักษณ์ ห่างจากขอบกระดาษ
 const boxScale = (layout, type) => (layout.boxes[type] && layout.boxes[type].s) || 1;
 
 /* ---------- การตั้งค่า ---------- */
@@ -226,23 +228,23 @@ function buildPage(ctx, m, U, settings, layout, refZoom) {
   const Ub = type => U * boxScale(layout, type);
   if (settings.furniture.logo && exportAssets.logo) {
     const w = 34 * Ub('logo'), h = w * exportAssets.logo.height / exportAssets.logo.width;
-    place('logo', w, h, 10, 8);
+    place('logo', w, h, EDGE_MM, EDGE_MM);
   }
   if (settings.table.on && overlayState.tung.data) {
     const spec = tableSpec(ctx, settings, Ub('table'));
-    place('table', spec.w, spec.h, 10, 58).spec = spec;
+    place('table', spec.w, spec.h, EDGE_MM, EDGE_MM + 50).spec = spec;
   }
   if (settings.legend.on) {
     const spec = legendSpec(settings, Ub('legend'));
-    place('legend', spec.w, spec.h, 10, PAGE_MM[1] - 10 - spec.h / U).spec = spec;
+    place('legend', spec.w, spec.h, EDGE_MM, PAGE_MM[1] - EDGE_MM - spec.h / U).spec = spec;
   }
   if (settings.furniture.north) {
     const u = Ub('north');
-    place('north', 18 * u, 22 * u, PAGE_MM[0] - 10 - 18 * u / U, 10);
+    place('north', 18 * u, 22 * u, PAGE_MM[0] - EDGE_MM - 18 * u / U, EDGE_MM);
   }
   if (settings.furniture.scalebar) {
     const spec = scalebarSpec(m, Ub('scalebar'));
-    place('scalebar', spec.w, spec.h, PAGE_MM[0] - 10 - spec.w / U, PAGE_MM[1] - 10 - spec.h / U).spec = spec;
+    place('scalebar', spec.w, spec.h, PAGE_MM[0] - EDGE_MM - spec.w / U, PAGE_MM[1] - EDGE_MM - spec.h / U).spec = spec;
   }
 
   // ---- ป้ายชื่อ ----
@@ -310,7 +312,10 @@ function buildPage(ctx, m, U, settings, layout, refZoom) {
     pinnedBoxes.push({ x1: x - bw / 2 - 2, y1: y - bh / 2 - 2, x2: x + bw / 2 + 2, y2: y + bh / 2 + 2 });
     labels.push({ ...meta, x, y, rot: it.rot, w: it.w, h: it.h, bw, bh, pinned: true, hidden: false });
   });
-  const obstacles = boxes.map(b => ({ x1: b.x1 - mm(2), y1: b.y1 - mm(2), x2: b.x2 + mm(2), y2: b.y2 + mm(2) })).concat(pinnedBoxes);
+  const mg = mm(PAGE_MARGIN_MM);
+  const marginStrips = [{ x1: -1, y1: -1, x2: W + 1, y2: mg }, { x1: -1, y1: H - mg, x2: W + 1, y2: H + 1 },
+    { x1: -1, y1: -1, x2: mg, y2: H + 1 }, { x1: W - mg, y1: -1, x2: W + 1, y2: H + 1 }];
+  const obstacles = boxes.map(b => ({ x1: b.x1 - mm(2), y1: b.y1 - mm(2), x2: b.x2 + mm(2), y2: b.y2 + mm(2) })).concat(pinnedBoxes, marginStrips);
   const results = placeLabels(autoIdx.map(i => items[i]), {
     width: W, height: H, gap: iconR + mm(1), pad: mm(0.8), obstacles, iconObstacles: iconR ? iconObstaclesFor(m, iconR) : [],
   });
@@ -329,8 +334,13 @@ function buildPage(ctx, m, U, settings, layout, refZoom) {
 function drawPage(ctx, m, U, settings, page, { editing = false, selected = null, selectedBox = null, handlePx = 10 } = {}) {
   const mm = v => v * U;
   const { W, H } = page;
+  // ขอบกระดาษสีขาว 4 ด้าน (ทับขอบแผนที่) + กรอบเส้นรอบพื้นที่แผนที่
+  const mg = mm(PAGE_MARGIN_MM);
+  ctx.fillStyle = '#ffffff';
+  ctx.fillRect(0, 0, W, mg); ctx.fillRect(0, H - mg, W, mg);
+  ctx.fillRect(0, 0, mg, H); ctx.fillRect(W - mg, 0, mg, H);
   ctx.strokeStyle = '#374151'; ctx.lineWidth = Math.max(1, mm(0.4));
-  ctx.strokeRect(mm(0.2), mm(0.2), W - mm(0.4), H - mm(0.4));
+  ctx.strokeRect(mg, mg, W - 2 * mg, H - 2 * mg);
 
   for (const b of page.boxes) {
     const bw = b.x2 - b.x1, bh = b.y2 - b.y1;
