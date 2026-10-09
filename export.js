@@ -494,11 +494,11 @@ function setMapTitle(v, source) {
 $('dsTitle').addEventListener('input', e => setMapTitle(e.target.value, e.target));
 function setTitleBg(on) {
   ds.settings.titleBg = on; saveExportState();
-  $('dsTitleBg').setAttribute('aria-pressed', String(on)); $('dsTitleBg').classList.toggle('seg-on', on);
+  $('dsTitleBg').checked = on;
   const f = $('dsTitleBgField'); if (f) f.checked = on;
   scheduleRender();
 }
-$('dsTitleBg').onclick = () => setTitleBg(ds.settings.titleBg === false);
+$('dsTitleBg').onchange = e => setTitleBg(e.target.checked);
 $('dsSheetBody').addEventListener('change', e => { if (e.target.id === 'dsTitleBgField') setTitleBg(e.target.checked); });
 $('dsSheetBody').addEventListener('input', e => { if (e.target.id === 'dsTitleField') setMapTitle(e.target.value, e.target); });
 
