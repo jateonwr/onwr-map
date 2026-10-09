@@ -121,7 +121,8 @@ const OVERLAYS = [
     // ขอบเขตจังหวัด: เส้นสีดำ ไม่มีพื้น + ชื่อจังหวัด
     id: 'provinces', name: 'ขอบเขตจังหวัด', url: 'data/provinces.geojson', visible: true, opacity: 1,
     icon: 'boundary', swatch: 'transparent', outline: '#000000', titleField: 'name',
-    labels: true, labelClass: 'prov-label', labelMinZoom: 7, noClick: true,
+    labels: true, labelClass: 'prov-label', labelMinZoom: 7, noClick: true, lineStyle: 'solid',
+    legend: true, legendTitle: 'เลือกจังหวัด', focusKind: 'prov',
     countText: data => `${data.features.filter(f => f.geometry.type === 'Point').length} จังหวัด`,
     layers: (src, op) => [
       { id: `${src}-line`, type: 'line', source: src, filter: ['!=', '$type', 'Point'],
@@ -135,9 +136,8 @@ const OVERLAYS = [
     // ขอบเขตลุ่มน้ำหลัก 22 ลุ่ม (สทนช.): เส้นประสีเขียวอมฟ้า ไม่มีพื้น + ชื่อลุ่มน้ำ
     id: 'basins', name: 'ลุ่มน้ำหลัก', url: 'data/basins.geojson', visible: true, opacity: 1,
     icon: 'boundary', swatch: 'transparent', outline: '#0f766e', titleField: 'name',
-    labels: true, labelClass: 'basin-label', labelMinZoom: 6, noClick: true,
-    legend: true, legendTitle: 'เลือกลุ่มน้ำ', onPick: f => setFocusBasin(f.properties.code),
-    onLabelClick: f => setFocusBasin(f.properties.code),
+    labels: true, labelClass: 'basin-label', labelMinZoom: 6, noClick: true, lineStyle: 'dash', dash: true,
+    legend: true, legendTitle: 'เลือกลุ่มน้ำ', focusKind: 'basin',
     countText: data => `${data.features.filter(f => f.geometry.type === 'Point').length} ลุ่มน้ำ`,
     layers: (src, op) => [
       { id: `${src}-line`, type: 'line', source: src, filter: ['!=', '$type', 'Point'],
@@ -378,7 +378,7 @@ map.on('load', async () => {
     if (o.labels) createLabels(o);
   }
   onMapReady.forEach(fn => fn());
-  addBasinFocusLayers(map);
+  addFocusLayers(map);
   map.addLayer({ id: 'selected-fill', type: 'fill', source: 'selected', filter: ['==', '$type', 'Polygon'],
     paint: { 'fill-color': '#facc15', 'fill-opacity': 0.25 } });
   map.addLayer({ id: 'selected-line', type: 'line', source: 'selected', layout: { 'line-cap': 'round', 'line-join': 'round' },
@@ -389,8 +389,9 @@ map.on('load', async () => {
   renderLayerPanel();
   updateLabels();
   if (lastFix) updateZone(lastFix);
-  const savedBasin = store.get('focus:basin', null);
-  if (savedBasin) setFocusBasin(savedBasin, { fit: false });
+  const oldBasin = store.get('focus:basin', null);   // ค่าที่จำไว้จากรุ่นก่อน (เน้นได้เฉพาะลุ่มน้ำ)
+  const savedFocus = store.get('focus:area', oldBasin ? `basin:${oldBasin}` : null);
+  if (savedFocus) setFocusArea(savedFocus, { fit: false });
 });
 
 /* ป้ายชื่อแบบ HTML (รองรับสระ/วรรณยุกต์ภาษาไทยถูกต้อง) */
@@ -406,7 +407,7 @@ function createLabels(o) {
       el.firstChild.textContent = f.properties[o.titleField];
       if (o.labelExtra) el.children[1].textContent = o.labelExtra(f.properties);
       st.labelEls[f.properties[o.titleField]] = el;
-      if (o.onLabelClick) el.addEventListener('click', e => { e.stopPropagation(); o.onLabelClick(f); });
+      if (o.focusKind) el.addEventListener('click', e => { e.stopPropagation(); setFocusArea(`${o.focusKind}:${f.properties.code}`); });
       const m = new maplibregl.Marker({ element: el, anchor: 'center' }).setLngLat([f.properties.label_lng, f.properties.label_lat]);
       m.movable = !!o.labelAnchor;    // ป้ายของจุด: ย้ายไปรอบจุดได้ (ขวา → ซ้าย → บน → ล่าง)
       return m;
@@ -558,7 +559,7 @@ function resolveLabels() {
 
   // ปุ่ม/โลโก้/แผงบนจอ: ไม่วางป้ายไว้ใต้ปุ่ม
   const mb = map.getContainer().getBoundingClientRect();
-  const ui = [...document.querySelectorAll('#btnMeasure, #btnVisits, #btnExport, #onwrLogo, #basinChip, #btnLayers, #btnCompass, #zoomBox, #btnRecord, #btnLocate, #recBar, #measurePanel, #zoneChip')]
+  const ui = [...document.querySelectorAll('#btnMeasure, #btnVisits, #btnExport, #btnFocus, #onwrLogo, #focusChip, #btnLayers, #btnCompass, #zoomBox, #btnRecord, #btnLocate, #recBar, #measurePanel, #zoneChip')]
     .filter(el => el.offsetParent && getComputedStyle(el).visibility !== 'hidden')
     .map(el => { const b = el.getBoundingClientRect(); return { x1: b.left - mb.left - 4, y1: b.top - mb.top - 4, x2: b.right - mb.left + 4, y2: b.bottom - mb.top + 4 }; });
 
@@ -665,7 +666,7 @@ function renderLayerPanel() {
         </button>
         <div class="flex flex-wrap gap-1.5 mt-1 ${open ? '' : 'hidden'}" data-legend-list="${o.id}">
           ${items.map(f => `
-            <button data-zoomfeat="${o.id}:${f.id}" class="flex items-center gap-1.5 rounded-full ${o.onPick && focusBasin && focusBasin.code === f.properties.code ? 'bg-teal-100 text-teal-900 ring-1 ring-teal-600' : 'bg-gray-100'} active:bg-gray-200 pl-2 pr-2.5 h-8 text-[13px]">
+            <button data-zoomfeat="${o.id}:${f.id}" class="flex items-center gap-1.5 rounded-full ${o.focusKind && focusArea && focusArea.key === `${o.focusKind}:${f.properties.code}` ? 'bg-teal-100 text-teal-900 ring-1 ring-teal-600' : 'bg-gray-100'} active:bg-gray-200 pl-2 pr-2.5 h-8 text-[13px]">
               ${layerIcon(o, 14)}${escapeHtml(displayName(o, f.properties))}
             </button>`).join('')}
         </div>
@@ -745,7 +746,7 @@ $('overlayList').addEventListener('click', e => {
     const [id, fid] = zf.dataset.zoomfeat.split(':');
     const o = OVERLAYS.find(x => x.id === id);
     const f = overlayState[id].data.features[+fid];
-    if (o.onPick) { o.onPick(f); return; }
+    if (o.focusKind) { setFocusArea(`${o.focusKind}:${f.properties.code}`); return; }
     fitTo(geomBounds(f));
     showInfo(o, f);
   }
@@ -779,52 +780,66 @@ function fitTo(bounds) {
 }
 
 /* ============================================================
- *  เน้นลุ่มน้ำ: ซูมเข้า + พื้นที่นอกลุ่มน้ำเป็นสีขาวทึบ
+ *  เน้นพื้นที่ (ลุ่มน้ำหลัก / จังหวัด): ซูมเข้า + พื้นที่รอบนอกเป็นสีขาว (ทึบ/จาง)
  *  สถานะเดียวใช้ร่วมกันทั้งแผนที่หลัก หน้าจัดวาง และภาพ export
  * ============================================================ */
-const BASIN_FOCUS_WIDTH = ['interpolate', ['linear'], ['zoom'], 5, 2.5, 8, 3.5, 11, 5, 14, 6];
-let focusBasin = null;          // { code, name, feature, bbox, bounds } | null
+const FOCUS_LINE_WIDTH = ['interpolate', ['linear'], ['zoom'], 5, 2.5, 8, 3.5, 11, 5, 14, 6];
+let focusArea = null;          // { key: 'basin:10' | 'prov:TH10', kind, code, name, feature, bbox, bounds } | null
 let focusFade = !!store.get('focus:fade', false);   // รอบนอก: false = ขาวทึบ · true = ขาวจาง (ยังเห็นแผนที่ด้านหลัง)
 const FOCUS_FADE_OPACITY = 0.7;
-const focusListeners = [];      // fn(focusBasin) — เช่น หน้าจัดวาง
-let basinAreasPromise = null;
-function loadBasinAreas() {     // ขอบเขตแบบพื้นที่ โหลดเมื่อเลือกลุ่มน้ำครั้งแรก
-  if (!basinAreasPromise) basinAreasPromise = fetch('data/basins-area.geojson', { cache: 'no-cache' })
+const focusListeners = [];      // fn(focusArea) — เช่น หน้าจัดวาง
+/* ชนิดพื้นที่ที่เน้นได้ — layer = ชั้นข้อมูลที่มีจุดชื่อ (properties.code/name) ไว้ทำรายการ */
+const FOCUS_KINDS = {
+  basin: { url: 'data/basins-area.geojson', layer: 'basins', title: 'ลุ่มน้ำหลัก', color: '#0f766e', label: n => n },
+  prov: { url: 'data/provinces-area.geojson', layer: 'provinces', title: 'จังหวัด', color: '#111827',
+          label: n => n === 'กรุงเทพมหานคร' ? n : `จังหวัด${n}` },
+};
+const focusAreasPromise = {};
+function loadFocusAreas(kind) {  // ขอบเขตแบบพื้นที่ โหลดเมื่อเลือกครั้งแรก
+  if (!focusAreasPromise[kind]) focusAreasPromise[kind] = fetch(FOCUS_KINDS[kind].url, { cache: 'no-cache' })
     .then(r => { if (!r.ok) throw new Error(r.status); return r.json(); })
-    .catch(err => { basinAreasPromise = null; throw err; });
-  return basinAreasPromise;
+    .catch(err => { delete focusAreasPromise[kind]; throw err; });
+  return focusAreasPromise[kind];
 }
-const basinPolys = f => f.geometry.type === 'Polygon' ? [f.geometry.coordinates] : f.geometry.coordinates;
+/* รายการที่เลือกได้ (จากจุดชื่อของชั้นข้อมูล) [{ key, name }] */
+function focusChoices(kind) {
+  const d = overlayState[FOCUS_KINDS[kind].layer].data;
+  return (d ? d.features : []).filter(f => f.properties.code && f.properties.name)
+    .map(f => ({ key: `${kind}:${f.properties.code}`, name: FOCUS_KINDS[kind].label(f.properties.name) }))
+    .sort((a, b) => kind === 'prov' ? a.name.localeCompare(b.name, 'th') : 0);
+}
+const areaPolys = f => f.geometry.type === 'Polygon' ? [f.geometry.coordinates] : f.geometry.coordinates;
 const ringArea = r => { let a = 0; for (let i = 0; i < r.length - 1; i++) a += r[i][0] * r[i + 1][1] - r[i + 1][0] * r[i][1]; return a / 2; };
 const orientRing = (r, ccw) => (ringArea(r) > 0) === ccw ? r : [...r].reverse();
-/* สี่เหลี่ยมคลุมโลก เจาะรูเป็นรูปลุ่มน้ำ (วงนอก CCW · รู CW) */
-function basinMaskFC(f) {
+/* สี่เหลี่ยมคลุมโลก เจาะรูเป็นรูปพื้นที่ที่เน้น (วงนอก CCW · รู CW) */
+function focusMaskFC(f) {
   if (!f) return emptyFC();
   const world = [[-180, -85], [180, -85], [180, 85], [-180, 85], [-180, -85]];
-  const holes = basinPolys(f).map(p => orientRing(p[0], false));
+  const holes = areaPolys(f).map(p => orientRing(p[0], false));
   return { type: 'FeatureCollection', features: [{ type: 'Feature', properties: {}, geometry: { type: 'Polygon', coordinates: [orientRing(world, true), ...holes] } }] };
 }
-function addBasinFocusLayers(m) {
-  if (m.getSource('basin-mask')) return;
-  m.addSource('basin-mask', { type: 'geojson', data: emptyFC() });
-  m.addSource('basin-focus', { type: 'geojson', data: emptyFC() });
-  m.addLayer({ id: 'basin-mask-fill', type: 'fill', source: 'basin-mask', paint: { 'fill-color': '#ffffff', 'fill-opacity': 1 } });
-  m.addLayer({ id: 'basin-focus-line', type: 'line', source: 'basin-focus', layout: { 'line-join': 'round', 'line-cap': 'round' },
-    paint: { 'line-color': '#0f766e', 'line-width': BASIN_FOCUS_WIDTH } });
-  setBasinFocusData(m);
+function addFocusLayers(m) {
+  if (m.getSource('focus-mask')) return;
+  m.addSource('focus-mask', { type: 'geojson', data: emptyFC() });
+  m.addSource('focus-shape', { type: 'geojson', data: emptyFC() });
+  m.addLayer({ id: 'focus-mask-fill', type: 'fill', source: 'focus-mask', paint: { 'fill-color': '#ffffff', 'fill-opacity': 1 } });
+  m.addLayer({ id: 'focus-line', type: 'line', source: 'focus-shape', layout: { 'line-join': 'round', 'line-cap': 'round' },
+    paint: { 'line-color': '#0f766e', 'line-width': FOCUS_LINE_WIDTH } });
+  setFocusData(m);
 }
-function setBasinFocusData(m) {
-  if (!m || !m.getSource('basin-mask')) return;
-  m.getSource('basin-mask').setData(basinMaskFC(focusBasin && focusBasin.feature));
-  m.getSource('basin-focus').setData(focusBasin ? { type: 'FeatureCollection', features: [focusBasin.feature] } : emptyFC());
-  m.setPaintProperty('basin-mask-fill', 'fill-opacity', focusFade ? FOCUS_FADE_OPACITY : 1);
+function setFocusData(m) {
+  if (!m || !m.getSource('focus-mask')) return;
+  m.getSource('focus-mask').setData(focusMaskFC(focusArea && focusArea.feature));
+  m.getSource('focus-shape').setData(focusArea ? { type: 'FeatureCollection', features: [focusArea.feature] } : emptyFC());
+  m.setPaintProperty('focus-mask-fill', 'fill-opacity', focusFade ? FOCUS_FADE_OPACITY : 1);
+  if (focusArea) m.setPaintProperty('focus-line', 'line-color', FOCUS_KINDS[focusArea.kind].color);
 }
 function setFocusFade(on) {
   focusFade = !!on;
   store.set('focus:fade', focusFade);
-  setBasinFocusData(map);
-  renderBasinChip();
-  focusListeners.forEach(fn => fn(focusBasin));
+  setFocusData(map);
+  renderFocusChip();
+  focusListeners.forEach(fn => fn(focusArea));
 }
 function pointInRing(x, y, r) {
   let c = false;
@@ -833,46 +848,116 @@ function pointInRing(x, y, r) {
   }
   return c;
 }
-/* จุด (LngLat หรือ [lng, lat]) อยู่ในลุ่มน้ำที่เน้นหรือไม่ — ไม่ได้เน้น = true */
+/* จุด (LngLat หรือ [lng, lat]) อยู่ในพื้นที่ที่เน้นหรือไม่ — ไม่ได้เน้น = true */
 function inFocus(ll) {
-  if (!focusBasin) return true;
+  if (!focusArea) return true;
   const x = Array.isArray(ll) ? ll[0] : ll.lng, y = Array.isArray(ll) ? ll[1] : ll.lat;
-  const [w, s, e, n] = focusBasin.bbox;
+  const [w, s, e, n] = focusArea.bbox;
   if (x < w || x > e || y < s || y > n) return false;
-  return basinPolys(focusBasin.feature).some(p => pointInRing(x, y, p[0]) && !p.slice(1).some(h => pointInRing(x, y, h)));
+  return areaPolys(focusArea.feature).some(p => pointInRing(x, y, p[0]) && !p.slice(1).some(h => pointInRing(x, y, h)));
 }
-async function setFocusBasin(code, { fit = true } = {}) {
-  if (!code) focusBasin = null;
+/* key = 'basin:10' / 'prov:TH10' · null = เลิกเน้น */
+async function setFocusArea(key, { fit = true } = {}) {
+  if (!key) focusArea = null;
   else {
+    const [kind, code] = key.split(':');
+    if (!FOCUS_KINDS[kind]) return;
     let data;
-    try { data = await loadBasinAreas(); }
-    catch (err) { console.error('basins-area', err); toast('โหลดขอบเขตลุ่มน้ำไม่สำเร็จ'); return; }
+    try { data = await loadFocusAreas(kind); }
+    catch (err) { console.error('focus area', err); toast(`โหลดขอบเขต${FOCUS_KINDS[kind].title}ไม่สำเร็จ`); return; }
     const f = data.features.find(x => x.properties.code === code);
-    if (!f) { store.set('focus:basin', null); return; }
+    if (!f) { store.set('focus:area', null); return; }
     const [[w, s], [e, n]] = geomBounds(f);
-    focusBasin = { code, name: f.properties.name, feature: f, bbox: [w, s, e, n], bounds: [[w, s], [e, n]] };
+    focusArea = { key, kind, code, name: FOCUS_KINDS[kind].label(f.properties.name), feature: f, bbox: [w, s, e, n], bounds: [[w, s], [e, n]] };
   }
-  store.set('focus:basin', focusBasin ? focusBasin.code : null);
-  setBasinFocusData(map);
-  renderBasinChip();
-  if (fit && focusBasin) fitTo(focusBasin.bounds);
+  store.set('focus:area', focusArea ? focusArea.key : null);
+  setFocusData(map);
+  renderFocusChip();
+  if (fit && focusArea) fitTo(focusArea.bounds);
   updateLabels();
-  if (map.getSource('basins')) renderLayerPanel();
-  focusListeners.forEach(fn => fn(focusBasin));
+  if (map.getSource('tung')) renderLayerPanel();
+  focusListeners.forEach(fn => fn(focusArea));
 }
-function renderBasinChip() {
-  $('basinChip').classList.toggle('hidden', !focusBasin);
-  $('basinChip').classList.toggle('flex', !!focusBasin);
-  $('basinChipName').querySelector('span').textContent = focusBasin ? focusBasin.name : '';
-  const fb = $('basinChipFade');
+function renderFocusChip() {
+  const bf = $('btnFocus');
+  bf.classList.toggle('bg-teal-600', !!focusArea); bf.classList.toggle('text-white', !!focusArea);
+  bf.classList.toggle('bg-white', !focusArea); bf.classList.toggle('text-gray-700', !focusArea);
+  $('focusChip').classList.toggle('hidden', !focusArea);
+  $('focusChip').classList.toggle('flex', !!focusArea);
+  $('focusChipName').querySelector('span').textContent = focusArea ? focusArea.name : '';
+  const fb = $('focusChipFade');
   fb.setAttribute('aria-pressed', String(focusFade));
   fb.setAttribute('aria-label', focusFade ? 'รอบนอก: ขาวจาง (แตะเพื่อเป็นขาวทึบ)' : 'รอบนอก: ขาวทึบ (แตะเพื่อเป็นขาวจาง)');
   fb.querySelector('[data-solid]').classList.toggle('hidden', focusFade);
   fb.querySelector('[data-fade]').classList.toggle('hidden', !focusFade);
 }
-$('basinChipName').onclick = () => { if (focusBasin) fitTo(focusBasin.bounds); };
-$('basinChipClear').onclick = () => setFocusBasin(null);
-$('basinChipFade').onclick = () => { setFocusFade(!focusFade); toast(focusFade ? 'รอบนอกลุ่มน้ำ: ขาวจาง' : 'รอบนอกลุ่มน้ำ: ขาวทึบ'); };
+$('focusChipName').onclick = () => { if (focusArea) fitTo(focusArea.bounds); };
+
+/* เมนูเลือกพื้นที่ที่เน้น (ใช้ร่วม: ปุ่มบนแผนที่หลัก + ปุ่มบนแถบหน้าจัดวาง)
+   ขาวทึบ/ขาวจาง + ค้นหา + รายการลุ่มน้ำหลัก / จังหวัด · onPick(key | '') */
+let focusMenuPick = null;
+let focusMenuKind = store.get('focus:kind', 'basin');   // ชนิดที่แสดงในรายการ: basin | prov
+function renderFocusMenu() {
+  if (!FOCUS_KINDS[focusMenuKind]) focusMenuKind = 'basin';
+  const cur = focusArea ? focusArea.key : '';
+  const item = (key, name) => `<button data-focus="${key}" data-name="${escapeHtml(name)}" class="w-full text-left px-3 min-h-[40px] rounded-xl text-sm ${cur === key ? 'bg-teal-50 text-teal-900 font-semibold' : 'active:bg-gray-100 hover:bg-gray-50'}">${escapeHtml(name)}</button>`;
+  const list = focusChoices(focusMenuKind);
+  const seg = (v, label) => `<button data-fade="${v}" class="h-8 px-3 rounded-full text-xs font-semibold ${(v === '1') === focusFade ? 'bg-blue-600 text-white' : 'text-gray-700'}">${label}</button>`;
+  $('focusMenu').innerHTML = `
+    <div class="p-2 border-b border-gray-100 flex flex-col gap-2">
+      <div class="flex items-center gap-2">
+        <select id="focusKind" aria-label="ชนิดพื้นที่" class="flex-1 min-w-0 h-10 rounded-xl border border-gray-300 bg-white px-2 text-sm font-medium">
+          ${Object.entries(FOCUS_KINDS).map(([k, v]) => `<option value="${k}" ${k === focusMenuKind ? 'selected' : ''}>${v.title} (${focusChoices(k).length})</option>`).join('')}
+        </select>
+        <div class="flex rounded-full bg-gray-100 p-0.5 flex-none" title="พื้นที่รอบนอก">${seg('1', 'ขาวจาง')}${seg('0', 'ขาวทึบ')}</div></div>
+      <input id="focusSearch" type="search" placeholder="ค้นหา${FOCUS_KINDS[focusMenuKind].title}" class="h-10 rounded-xl border border-gray-300 px-3 text-sm">
+    </div>
+    <div class="flex-1 min-h-0 overflow-y-auto p-1.5">${item('', 'แสดงทั้งหมด')}${list.map(c => item(c.key, c.name)).join('')}</div>`;
+}
+/* เปิดใต้ปุ่ม anchor (ชิดซ้าย/ขวาตามตำแหน่งปุ่ม) · เรียกซ้ำ = ปิด · toggleFocusMenu(false) = ปิด */
+function toggleFocusMenu(anchor, onPick) {
+  const m = $('focusMenu');
+  const open = anchor !== false && m.classList.contains('hidden');
+  if (open) {
+    focusMenuPick = onPick;
+    if (focusArea) focusMenuKind = focusArea.kind;
+    renderFocusMenu();
+    const r = anchor.getBoundingClientRect(), top = Math.round(r.bottom + 8);
+    m.style.top = top + 'px';
+    m.style.maxHeight = Math.max(240, Math.min(560, innerHeight - top - 12)) + 'px';
+    const mw = Math.min(340, innerWidth - 16);   // ชิดขอบปุ่มด้านที่กว้างพอ แต่ไม่ให้ล้นจอ
+    const left = r.left + r.width / 2 < innerWidth / 2 ? r.left : r.right - mw;
+    m.style.left = Math.round(Math.min(Math.max(8, left), innerWidth - mw - 8)) + 'px'; m.style.right = '';
+  }
+  m.classList.toggle('hidden', !open); m.classList.toggle('flex', open);
+}
+$('focusMenu').addEventListener('click', e => {
+  const f = e.target.closest('[data-fade]');
+  if (f) { setFocusFade(f.dataset.fade === '1'); renderFocusMenu(); return; }
+  const b = e.target.closest('[data-focus]');
+  if (!b) return;
+  const pick = focusMenuPick;
+  toggleFocusMenu(false);
+  if (pick) pick(b.dataset.focus);
+});
+$('focusMenu').addEventListener('input', e => {
+  if (e.target.id === 'focusKind') { focusMenuKind = e.target.value; store.set('focus:kind', focusMenuKind); renderFocusMenu(); return; }
+  if (e.target.id !== 'focusSearch') return;
+  const q = e.target.value.trim();
+  $('focusMenu').querySelectorAll('[data-focus]').forEach(b => b.classList.toggle('hidden', !!q && b.dataset.focus !== '' && !b.dataset.name.includes(q)));
+});
+document.addEventListener('pointerdown', e => {
+  if (!$('focusMenu').classList.contains('hidden') && !e.target.closest('#focusMenu, #btnFocus, #dsFocusBtn')) toggleFocusMenu(false);
+});
+document.addEventListener('keydown', e => { if (e.key === 'Escape') toggleFocusMenu(false); });
+/* ปุ่มบนแผนที่หลัก (ใต้ปุ่มรูป) */
+$('btnFocus').onclick = e => {
+  e.stopPropagation();
+  if (!overlayState.basins.data && !overlayState.provinces.data) { toast('ข้อมูลยังโหลดไม่เสร็จ'); return; }
+  toggleFocusMenu($('btnFocus'), key => setFocusArea(key || null));
+};
+$('focusChipClear').onclick = () => setFocusArea(null);
+$('focusChipFade').onclick = () => { setFocusFade(!focusFade); toast(focusFade ? 'พื้นที่รอบนอก: ขาวจาง' : 'พื้นที่รอบนอก: ขาวทึบ'); };
 
 /* ============================================================
  *  แผง (sheet) เปิด/ปิด + ลากลงเพื่อปิด
@@ -964,7 +1049,7 @@ function escapeHtml(s) { return s.replace(/[&<>"']/g, c => ({ '&': '&amp;', '<':
 /* ไอคอนของชั้นข้อมูล (หน้าตาเหมือนบนแผนที่) → SVG */
 const ICON_SHAPES = {
   area:       (o) => `<path d="M4 7 11 3l9 2.5 1 8-4.5 7L8 21l-5-6z" fill="${o.swatch}" stroke="${o.outline}" stroke-width="2.6" stroke-linejoin="round"/>`,
-  boundary:   (o) => `<path d="M4 7 11 3l9 2.5 1 8-4.5 7L8 21l-5-6z" fill="none" stroke="${o.outline}" stroke-width="2.6" stroke-linejoin="round"/>`,
+  boundary:   (o) => `<path d="M4 7 11 3l9 2.5 1 8-4.5 7L8 21l-5-6z" fill="none" stroke="${o.outline}" stroke-width="2.6" stroke-linejoin="round"${o.dash ? ' stroke-dasharray="3.2 2.2"' : ''}/>`,
   lake:       (o) => `<path d="M4.5 10c-.4-3 2.4-5.4 5.4-5 2 .3 3.1-.9 5.1-.6 3 .5 4.6 3.2 3.8 5.8-.5 1.6.8 3 .1 4.9-1 2.6-4.2 4-6.9 3.2-1.6-.5-3 .4-4.6-.3-2.4-1-3.6-3.6-2.9-6z" fill="${o.swatch}" stroke="${o.outline}" stroke-width="1.6" stroke-linejoin="round"/>`,
   rect:       (o) => `<rect x="2.5" y="6.5" width="19" height="11" fill="${o.swatch}" stroke="#ffffff" stroke-width="2.5"/>`,
   line:       (o) => `<path d="M2 17c3-6 5-6.5 7-2.5s4.5 4 6.5-1S19.5 7 22 9" fill="none" stroke="${o.swatch}" stroke-width="2" stroke-linecap="round"/>`,

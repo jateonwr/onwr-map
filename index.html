@@ -91,7 +91,7 @@
                    2px 2px 0 #fff, 0 2px 0 #fff, -2px 2px 0 #fff, -2px 0 0 #fff;
     }
     .basin-label .c, .basin-label .v { display: none; }
-    #map .basin-label { pointer-events: auto; cursor: pointer; }
+    #map .basin-label, #map .prov-label { pointer-events: auto; cursor: pointer; }
     .tung-label .c { font-size: calc(13px * var(--ls, 1)); font-weight: 600; margin-top: 1px; }
     .tung-label .c:empty, .water-label .c:empty, .stn-label .c:empty { display: none; }
     /* ค่าจาก Google Sheet ใต้ชื่อทุ่ง */
@@ -118,7 +118,7 @@
 
     /* หน้าจัดวางภาพ (export designer) */
     #designer .seg { display: flex; background: #f3f4f6; border-radius: 999px; padding: 2px; }
-    #designer .seg button { height: 32px; padding: 0 7px; border-radius: 999px; font-size: 12px; font-weight: 600; color: #374151; white-space: nowrap; }
+    #designer .seg button { height: 32px; padding: 0 5px; border-radius: 999px; font-size: 12px; font-weight: 600; color: #374151; white-space: nowrap; }
     #designer .seg button.seg-on { background: #1a73e8; color: #fff; }
     #designer .seg.justify-between button { flex: 1; padding: 0 4px; }
     #designer #dsSettings.seg-on { background: #1a73e8; color: #fff; }
@@ -157,14 +157,14 @@
       <img id="onwrLogo" src="assets/onwr-logo.png" alt="สำนักงานทรัพยากรน้ำแห่งชาติ (สทนช.)"
         class="flex-none w-12 h-auto drop-shadow-[0_1px_3px_rgba(255,255,255,0.9)] select-none" draggable="false" />
       <!-- ลุ่มน้ำที่เน้นอยู่ (แตะชื่อ = ซูมไป · ปุ่มกลาง = รอบนอกขาวทึบ/ขาวจาง · ✕ = เลิกเน้น) -->
-      <div id="basinChip" class="hidden pointer-events-auto min-w-0 items-center bg-white rounded-full shadow-md h-9 pl-1 pr-0.5 text-sm">
-        <button id="basinChipName" class="min-w-0 flex items-center gap-1.5 h-9 pl-2 pr-1 font-semibold text-teal-800">
+      <div id="focusChip" class="hidden pointer-events-auto min-w-0 items-center bg-white rounded-full shadow-md h-9 pl-1 pr-0.5 text-sm">
+        <button id="focusChipName" class="min-w-0 flex items-center gap-1.5 h-9 pl-2 pr-1 font-semibold text-teal-800">
           <svg class="w-4 h-4 flex-none" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-dasharray="4 2.5"><rect x="3.5" y="3.5" width="17" height="17" rx="3"/></svg>
           <span class="truncate"></span></button>
-        <button id="basinChipFade" aria-pressed="false" class="w-8 h-8 flex-none rounded-full grid place-items-center text-teal-800 active:bg-gray-100">
+        <button id="focusChipFade" aria-pressed="false" class="w-8 h-8 flex-none rounded-full grid place-items-center text-teal-800 active:bg-gray-100">
           <svg data-solid class="w-[18px] h-[18px]" viewBox="0 0 24 24"><rect x="2.5" y="2.5" width="19" height="19" rx="3" fill="#fff" stroke="currentColor" stroke-width="2"/><circle cx="12" cy="12" r="5" fill="currentColor"/></svg>
           <svg data-fade class="hidden w-[18px] h-[18px]" viewBox="0 0 24 24"><rect x="2.5" y="2.5" width="19" height="19" rx="3" fill="currentColor" fill-opacity=".3" stroke="currentColor" stroke-width="2"/><circle cx="12" cy="12" r="5" fill="currentColor"/></svg></button>
-        <button id="basinChipClear" aria-label="เลิกเน้นลุ่มน้ำ" class="w-8 h-8 flex-none rounded-full grid place-items-center text-gray-500 active:bg-gray-100">
+        <button id="focusChipClear" aria-label="เลิกเน้นลุ่มน้ำ" class="w-8 h-8 flex-none rounded-full grid place-items-center text-gray-500 active:bg-gray-100">
           <svg class="w-4 h-4" viewBox="0 0 24 24" fill="currentColor"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg></button>
       </div>
     </div>
@@ -187,6 +187,12 @@
     <button id="btnExport" aria-label="บันทึกภาพแผนที่ A2/A3"
       class="pointer-events-auto self-start w-12 h-12 flex-none rounded-full bg-white shadow-md grid place-items-center active:bg-gray-100">
       <svg class="w-6 h-6 text-gray-700" viewBox="0 0 24 24" fill="currentColor"><path d="M21 19V5c0-1.1-.9-2-2-2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2zM8.5 13.5l2.5 3.01L14.5 12l4.5 6H5l3.5-4.5z"/></svg>
+    </button>
+
+    <!-- เน้นพื้นที่: ลุ่มน้ำหลัก / จังหวัด (รอบนอกขาวทึบ/ขาวจาง) -->
+    <button id="btnFocus" aria-haspopup="menu" aria-label="เลือกพื้นที่"
+      class="pointer-events-auto self-start w-12 h-12 flex-none rounded-full bg-white text-gray-700 shadow-md grid place-items-center active:opacity-80">
+      <svg class="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><rect x="3" y="3" width="18" height="18" rx="3" stroke-dasharray="4 2.6"/><path d="M8 15.5l2.2-6 3 3.2 2.8-3.2v6z" fill="currentColor" stroke="none"/></svg>
     </button>
 
     <!-- แผงวัดระยะ -->
@@ -315,12 +321,18 @@
       </div>
       <div class="seg"><button data-mode="map">แผนที่</button><button data-mode="edit">จัดวาง</button></div>
       <span class="flex-1"></span>
+      <button id="dsFocusBtn" aria-haspopup="menu" aria-label="เลือกพื้นที่" class="h-9 min-w-[36px] flex-none px-1.5 rounded-full flex items-center justify-center gap-1 bg-gray-100 text-gray-700 active:opacity-80">
+        <svg class="w-5 h-5 flex-none" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><rect x="3" y="3" width="18" height="18" rx="3" stroke-dasharray="4 2.6"/><path d="M8 15.5l2.2-6 3 3.2 2.8-3.2v6z" fill="currentColor" stroke="none"/></svg>
+        <span id="dsFocusName" class="hidden md:inline max-w-[200px] truncate text-[13px] font-semibold">เลือกพื้นที่</span>
+        <svg class="hidden md:block w-4 h-4 flex-none" viewBox="0 0 24 24" fill="currentColor"><path d="M7.4 8.6 12 13.2l4.6-4.6L18 10l-6 6-6-6z"/></svg>
+      </button>
       <button id="dsSettings" aria-label="ตั้งค่า" aria-pressed="false" class="w-9 h-9 flex-none rounded-full grid place-items-center active:bg-gray-100">
         <svg class="w-5 h-5" viewBox="0 0 24 24" fill="currentColor"><path d="M19.43 12.98c.04-.32.07-.64.07-.98s-.03-.66-.07-.98l2.11-1.65c.19-.15.24-.42.12-.64l-2-3.46c-.12-.22-.39-.3-.61-.22l-2.49 1c-.52-.4-1.08-.73-1.69-.98l-.38-2.65C14.46 2.18 14.25 2 14 2h-4c-.25 0-.46.18-.49.42l-.38 2.65c-.61.25-1.17.59-1.69.98l-2.49-1c-.23-.09-.49 0-.61.22l-2 3.46c-.13.22-.07.49.12.64l2.11 1.65c-.04.32-.07.65-.07.98s.03.66.07.98l-2.11 1.65c-.19.15-.24.42-.12.64l2 3.46c.12.22.39.3.61.22l2.49-1c.52.4 1.08.73 1.69.98l.38 2.65c.03.24.24.42.49.42h4c.25 0 .46-.18.49-.42l.38-2.65c.61-.25 1.17-.59 1.69-.98l2.49 1c.23.09.49 0 .61-.22l2-3.46c.12-.22.07-.49-.12-.64l-2.11-1.65zM12 15.5c-1.93 0-3.5-1.57-3.5-3.5s1.57-3.5 3.5-3.5 3.5 1.57 3.5 3.5-1.57 3.5-3.5 3.5z"/></svg>
       </button>
       <div class="relative">
-        <button id="dsSave" aria-haspopup="menu" class="h-10 pl-2.5 pr-1.5 rounded-full bg-blue-600 text-white text-[13px] font-semibold whitespace-nowrap active:bg-blue-700 flex items-center gap-0.5">บันทึก
-          <svg class="w-4 h-4" viewBox="0 0 24 24" fill="currentColor"><path d="M7.4 8.6 12 13.2l4.6-4.6L18 10l-6 6-6-6z"/></svg></button>
+        <button id="dsSave" aria-haspopup="menu" aria-label="บันทึก" class="h-10 pl-2.5 pr-1.5 rounded-full bg-blue-600 text-white text-[13px] font-semibold whitespace-nowrap active:bg-blue-700 flex items-center gap-0.5">
+          <svg class="w-5 h-5 sm:hidden" viewBox="0 0 24 24" fill="currentColor"><path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/></svg><span class="hidden sm:inline">บันทึก</span>
+          <svg class="hidden sm:block w-4 h-4" viewBox="0 0 24 24" fill="currentColor"><path d="M7.4 8.6 12 13.2l4.6-4.6L18 10l-6 6-6-6z"/></svg></button>
         <div id="dsSaveMenu" role="menu" class="hidden absolute right-0 top-12 z-[55] flex gap-1.5 rounded-2xl bg-white shadow-2xl border border-gray-200 p-1.5">
           <button data-format="png" role="menuitem" aria-label="บันทึกเป็นภาพ PNG" title="PNG" class="w-12 h-12 rounded-xl bg-blue-50 text-blue-700 grid place-items-center text-[12px] font-bold active:bg-blue-100 hover:bg-blue-100">PNG</button>
           <button data-format="pdf" role="menuitem" aria-label="บันทึกเป็น PDF สำหรับพิมพ์" title="PDF" class="w-12 h-12 rounded-xl bg-red-50 text-red-700 grid place-items-center text-[12px] font-bold active:bg-red-100 hover:bg-red-100">PDF</button>
@@ -367,14 +379,16 @@
     </div>
   </div>
 
+  <!-- เมนูเลือกพื้นที่ที่เน้น (ใช้ร่วมกันทั้งแผนที่หลักและหน้าจัดวาง) -->
+  <div id="focusMenu" role="menu" class="hidden fixed z-[60] w-[min(340px,calc(100vw-16px))] flex-col rounded-2xl bg-white shadow-2xl border border-gray-200"></div>
   <div id="toast" class="fixed left-1/2 -translate-x-1/2 safe-bottom mb-24 z-40 bg-gray-900 text-white text-sm rounded-lg px-4 py-2.5 shadow-lg hidden max-w-[90vw] text-center"></div>
 
   <!-- เปลี่ยนเลข ?v= ทุกครั้งที่แก้ไฟล์ .js เพื่อให้มือถือโหลดไฟล์ใหม่ -->
-  <script src="app.js?v=61"></script>
-  <script src="sheet.js?v=61"></script>
-  <script src="track.js?v=61"></script>
-  <script src="measure.js?v=61"></script>
-  <script src="export-render.js?v=61"></script>
-  <script src="export.js?v=61"></script>
+  <script src="app.js?v=65"></script>
+  <script src="sheet.js?v=65"></script>
+  <script src="track.js?v=65"></script>
+  <script src="measure.js?v=65"></script>
+  <script src="export-render.js?v=65"></script>
+  <script src="export.js?v=65"></script>
 </body>
 </html>

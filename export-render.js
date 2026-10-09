@@ -35,6 +35,7 @@ const TABLE_COLS = [
   { key: 'pct', w: 21, t: 'ร้อยละเทียบ ความจุประชาคม', name: 'ร้อยละเทียบความจุประชาคม' },
 ];
 const BOX_SCALE_MIN = 0.3, BOX_SCALE_MAX = 4;
+const LINE_DASH = [3, 1.6];          // เส้นประของขอบเขตจังหวัด/ลุ่มน้ำ (หน่วย = ความหนาเส้น)
 const PAGE_MARGIN_MM = 8;            // ขอบกระดาษสีขาว 4 ด้าน (มม. บน A2)
 const EDGE_MM = PAGE_MARGIN_MM + 4;  // ตำแหน่งเริ่มต้นของโลโก้/ตาราง/สัญลักษณ์ ห่างจากขอบกระดาษ
 const boxScale = (boxes, type) => (boxes[type] && boxes[type].s) || 1;
@@ -50,7 +51,7 @@ function defaultExportSettings() {
   return {
     paper: 'A2',
     orient: 'portrait',
-    layers: Object.fromEntries(OVERLAYS.map(o => [o.id, { on: overlayState[o.id].visible, width: 1, iconSize: 1, ...layerColorDefaults(o) }])),
+    layers: Object.fromEntries(OVERLAYS.map(o => [o.id, { on: overlayState[o.id].visible, width: 1, iconSize: 1, ...layerColorDefaults(o), ...(o.lineStyle ? { dash: o.lineStyle } : {}) }])),
     labels: Object.fromEntries(Object.entries(LABEL_STYLES).map(([k, s]) => [k, { on: true, size: 1, color: s.color }])),
     table: { on: true, cols: Object.fromEntries(TABLE_COLS.map(c => [c.key, true])), totals: true },
     legend: { on: true, items: Object.fromEntries(LEGEND_ORDER.map(id => [id, true])) },
@@ -121,7 +122,7 @@ const exportAssets = { logo: null, icons: new Map() };
 const legendIconSvg = (o, s) => {
   const ls = s.layers[o.id];
   const swatch = POLY_ICONS.includes(o.icon) ? (ls.fillColor || o.swatch) : (ls.fillColor || ls.lineColor || o.swatch);
-  return layerIcon({ icon: o.icon, swatch, outline: ls.lineColor || o.outline }, 48)
+  return layerIcon({ icon: o.icon, swatch, outline: ls.lineColor || o.outline, dash: ls.dash === 'dash' }, 48)
     .replace('<svg ', '<svg xmlns="http://www.w3.org/2000/svg" ');
 };
 async function loadExportAssets(settings) {
@@ -154,10 +155,11 @@ function applyExportStyle(m, settings, U, refZoom, { minPx = 0 } = {}) {
       if (layout['icon-size'] != null) m.setLayoutProperty(def.id, 'icon-size', Math.max(minPx ? 0.3 : 0, numAt(layout['icon-size'], refZoom) * k * ls.iconSize));
       if (paint['fill-color'] != null && ls.fillColor) m.setPaintProperty(def.id, 'fill-color', ls.fillColor);
       if (paint['line-color'] != null && ls.lineColor && !def.id.endsWith('-casing')) m.setPaintProperty(def.id, 'line-color', ls.lineColor);
+      if (o.lineStyle && def.type === 'line') m.setPaintProperty(def.id, 'line-dasharray', ls.dash === 'dash' ? LINE_DASH : null);
       if (paint['circle-color'] != null && ls.fillColor) m.setPaintProperty(def.id, 'circle-color', ls.fillColor);
     }
   }
-  if (m.getLayer('basin-focus-line')) m.setPaintProperty('basin-focus-line', 'line-width', Math.max(minPx, numAt(BASIN_FOCUS_WIDTH, refZoom) * k));
+  if (m.getLayer('focus-line')) m.setPaintProperty('focus-line', 'line-width', Math.max(minPx, numAt(FOCUS_LINE_WIDTH, refZoom) * k));
 }
 
 /* ---------- ฟอนต์ของป้ายแต่ละชนิด (px ของ canvas) ---------- */
@@ -530,7 +532,7 @@ async function renderFinal({ settings, layout, center, zoom, pageW, prog, dpi = 
     });
     addMapImages(em, pointIconColors(settings));
     addOverlayLayers(em);
-    addBasinFocusLayers(em);
+    addFocusLayers(em);
     applyExportStyle(em, settings, U, zoom);
     await waitIdle(em, prog);
 

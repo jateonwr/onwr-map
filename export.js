@@ -34,6 +34,7 @@ async function openDesigner() {
   applySheetState();
   setMode('map');
   updatePaperButtons();
+  updateFocusButton();
   await Promise.all([document.fonts.load(`600 16px ${FONT_TH}`), document.fonts.load(`700 16px ${FONT_TH}`)]);
   await loadExportAssets(ds.settings);
   if (!ds.open) return;
@@ -47,7 +48,7 @@ async function openDesigner() {
   pm.once('load', () => {
     addMapImages(pm, pointIconColors(ds.settings));
     addOverlayLayers(pm);
-    addBasinFocusLayers(pm);
+    addFocusLayers(pm);
     applyPreviewStyle();
     pm.on('movestart', () => { $('dsCanvas').style.opacity = '0.35'; });
     pm.on('moveend', () => { applyPreviewStyle(); renderPreview(); });
@@ -358,28 +359,17 @@ function renderSettingsPanel() {
   $('dsTabs').innerHTML = TABS.map(([k, n]) => `<button data-tab="${k}" class="${ds.tab === k ? 'seg-on' : ''}">${n}</button>`).join('');
   let html = '';
   if (ds.tab === 'layers') {
-    const basinPts = (overlayState.basins.data ? overlayState.basins.data.features : []).filter(f => f.properties.code);
-    const focusSel = `
-      <label class="flex items-center gap-3 rounded-2xl border border-teal-600/40 bg-teal-50/60 px-3 min-h-[48px]">
-        <span class="text-sm font-medium text-teal-900 flex-none">เน้นลุ่มน้ำ</span>
-        <select id="dsFocusBasin" class="flex-1 min-w-0 h-9 rounded-lg border border-gray-300 bg-white px-2 text-sm">
-          <option value="">ไม่เน้น (แสดงทั้งหมด)</option>
-          ${basinPts.map(f => `<option value="${f.properties.code}" ${focusBasin && focusBasin.code === f.properties.code ? 'selected' : ''}>${escapeHtml(f.properties.name)}</option>`).join('')}
-        </select>
-      </label>
-      <div class="${focusBasin ? 'flex' : 'hidden'} items-center gap-3 px-3 -mt-1" data-focus-fade>
-        <span class="text-sm text-gray-600 flex-1">พื้นที่รอบนอก</span>
-        <div class="seg"><button data-fade="0" class="${focusFade ? '' : 'seg-on'}">ขาวทึบ</button><button data-fade="1" class="${focusFade ? 'seg-on' : ''}">ขาวจาง</button></div>
-      </div>`;
-    html = `<div class="flex flex-col gap-2">${focusSel}${OVERLAYS.map(o => {
+    html = `<div class="flex flex-col gap-2">${OVERLAYS.map(o => {
       const ls = s.layers[o.id];
       const isPoint = !POLY_ICONS.includes(o.icon) && !LINE_ICONS.includes(o.icon);
-      const icon = layerIcon({ icon: o.icon, swatch: ls.fillColor || ls.lineColor || o.swatch, outline: ls.lineColor || o.outline }, 22);
+      const icon = layerIcon({ icon: o.icon, swatch: ls.fillColor || ls.lineColor || o.swatch, outline: ls.lineColor || o.outline, dash: ls.dash === 'dash' }, 22);
       return card(`layer:${o.id}`,
         `<span class="w-8 h-8 rounded-lg flex-none bg-gray-100 grid place-items-center" data-icon="${o.id}">${icon}</span>
          <div class="flex-1 min-w-0 text-sm font-medium truncate">${o.name}</div>${toggle(`layers.${o.id}.on`, ls.on)}`,
         `${isPoint ? slider(`layers.${o.id}.iconSize`, ls.iconSize, 0.5, 3, 0.1, 'ขนาดไอคอน') : slider(`layers.${o.id}.width`, ls.width, 0.5, 3, 0.1, 'ความหนา')}
-         <div class="flex gap-5">${colorInput(`layers.${o.id}.fillColor`, ls.fillColor, isPoint ? 'สีไอคอน' : 'สีพื้น')}${colorInput(`layers.${o.id}.lineColor`, ls.lineColor, 'สีเส้น')}</div>`);
+         <div class="flex gap-5">${colorInput(`layers.${o.id}.fillColor`, ls.fillColor, isPoint ? 'สีไอคอน' : 'สีพื้น')}${colorInput(`layers.${o.id}.lineColor`, ls.lineColor, 'สีเส้น')}</div>
+         ${o.lineStyle ? `<div class="flex items-center gap-2 text-xs text-gray-600"><span class="w-16 flex-none">ชนิดเส้น</span>
+           <div class="seg"><button data-dash="${o.id}:solid" class="${ls.dash !== 'dash' ? 'seg-on' : ''}">เส้นทึบ</button><button data-dash="${o.id}:dash" class="${ls.dash === 'dash' ? 'seg-on' : ''}">เส้นประ</button></div></div>` : ''}`);
     }).join('')}</div>`;
   } else if (ds.tab === 'labels') {
     html = `<div class="flex flex-col gap-2">${Object.entries(LABEL_CLASS_NAMES).map(([cls, name]) => {
@@ -401,7 +391,7 @@ function renderSettingsPanel() {
       `<div class="border-t border-gray-100 mt-1 pt-1">${check('table.totals', s.table.totals, 'แถวรวม (10 ทุ่ง / 11 ทุ่ง)')}</div>`;
     const legendBody = LEGEND_ORDER.map(id => OVERLAYS.find(o => o.id === id)).filter(Boolean).map(o => {
       const ls = s.layers[o.id];
-      const icon = `<span class="w-6 h-6 flex-none grid place-items-center">${layerIcon({ icon: o.icon, swatch: ls.fillColor || ls.lineColor || o.swatch, outline: ls.lineColor || o.outline }, 20)}</span>`;
+      const icon = `<span class="w-6 h-6 flex-none grid place-items-center">${layerIcon({ icon: o.icon, swatch: ls.fillColor || ls.lineColor || o.swatch, outline: ls.lineColor || o.outline, dash: ls.dash === 'dash' }, 20)}</span>`;
       return check(`legend.items.${o.id}`, s.legend.items[o.id] !== false, ls.on ? o.name : `${o.name} <span class="text-xs text-gray-400">(เลเยอร์ปิดอยู่)</span>`, icon, !ls.on);
     }).join('');
     html = `<div class="flex flex-col gap-2">
@@ -442,9 +432,19 @@ $('dsTabs').addEventListener('click', e => {
   ds.tab = b.dataset.tab; ds.expanded = null;
   renderSettingsPanel();
 });
-$('dsSheetBody').addEventListener('click', e => {
-  const fb = e.target.closest('[data-fade]');
-  if (fb) { setFocusFade(fb.dataset.fade === '1'); return; }
+$('dsSheetBody').addEventListener('click', async e => {
+  const dashBtn = e.target.closest('[data-dash]');
+  if (dashBtn) {   // ชนิดเส้น: ทึบ / ประ (ขอบเขตจังหวัด, ลุ่มน้ำหลัก)
+    const [id, style] = dashBtn.dataset.dash.split(':'), ls = ds.settings.layers[id], o = OVERLAYS.find(x => x.id === id);
+    ls.dash = style; saveExportState();
+    dashBtn.parentElement.querySelectorAll('[data-dash]').forEach(b => b.classList.toggle('seg-on', b === dashBtn));
+    const holder = $('dsSheetBody').querySelector(`[data-icon="${id}"]`);
+    if (holder) holder.innerHTML = layerIcon({ icon: o.icon, swatch: ls.fillColor || ls.lineColor || o.swatch, outline: ls.lineColor || o.outline, dash: style === 'dash' }, 22);
+    applyPreviewStyle();
+    await loadExportAssets(ds.settings);
+    scheduleRender();
+    return;
+  }
   if (e.target.closest('.switch, input')) return;   // สวิตช์/ช่องสี ไม่ใช่การกาง
   const h = e.target.closest('[data-expand]');
   if (!h) return;
@@ -456,7 +456,6 @@ $('dsSheetBody').addEventListener('click', e => {
 
 const setPath = (obj, path, v) => { const ks = path.split('.'); let o = obj; for (const k of ks.slice(0, -1)) o = o[k]; o[ks[ks.length - 1]] = v; };
 $('dsSheetBody').addEventListener('input', async e => {
-  if (e.target.id === 'dsFocusBasin') { focusBasinFromDesigner(e.target.value); return; }
   const path = e.target.dataset.path;
   if (!path) return;
   const v = e.target.type === 'checkbox' ? e.target.checked : e.target.type === 'range' ? +e.target.value : e.target.value;
@@ -473,30 +472,32 @@ $('dsSheetBody').addEventListener('input', async e => {
       await loadExportAssets(ds.settings);
       const id = path.split('.')[1], o = OVERLAYS.find(x => x.id === id), ls = ds.settings.layers[id];
       const holder = $('dsSheetBody').querySelector(`[data-icon="${id}"]`);
-      if (holder) holder.innerHTML = layerIcon({ icon: o.icon, swatch: ls.fillColor || ls.lineColor || o.swatch, outline: ls.lineColor || o.outline }, 22);
+      if (holder) holder.innerHTML = layerIcon({ icon: o.icon, swatch: ls.fillColor || ls.lineColor || o.swatch, outline: ls.lineColor || o.outline, dash: ls.dash === 'dash' }, 22);
     }
   }
   scheduleRender();
 });
 
-/* ---------- เน้นลุ่มน้ำ (สถานะเดียวกับแผนที่หลัก) ---------- */
-async function focusBasinFromDesigner(code) {
-  await setFocusBasin(code || null, { fit: false });
-  if (focusBasin && ds.pm) {
+/* ---------- เน้นพื้นที่ (ลุ่มน้ำ / จังหวัด) ปุ่มบนแถบเครื่องมือ — สถานะเดียวกับแผนที่หลัก ---------- */
+async function focusFromDesigner(key) {
+  await setFocusArea(key || null, { fit: false });
+  if (focusArea && ds.pm) {
     const pad = Math.round(ds.U * (PAGE_MARGIN_MM + 10));
-    ds.pm.fitBounds(focusBasin.bounds, { padding: pad, duration: 0 });
+    ds.pm.fitBounds(focusArea.bounds, { padding: pad, duration: 0 });
   }
 }
+function updateFocusButton() {
+  const b = $('dsFocusBtn'), on = !!focusArea;
+  b.classList.toggle('bg-teal-600', on); b.classList.toggle('text-white', on);
+  b.classList.toggle('bg-gray-100', !on); b.classList.toggle('text-gray-700', !on);
+  $('dsFocusName').textContent = on ? focusArea.name : 'เลือกพื้นที่';
+  b.title = on ? `พื้นที่: ${focusArea.name}` : 'เลือกพื้นที่ (ลุ่มน้ำ / จังหวัด)';
+}
+$('dsFocusBtn').onclick = e => { e.stopPropagation(); toggleSaveMenu(false); toggleFocusMenu($('dsFocusBtn'), focusFromDesigner); };
 focusListeners.push(() => {
+  updateFocusButton();
   if (!ds.open || !ds.pm) return;
-  setBasinFocusData(ds.pm);
-  const sel = $('dsFocusBasin');
-  if (sel) sel.value = focusBasin ? focusBasin.code : '';
-  const row = $('dsSheetBody').querySelector('[data-focus-fade]');
-  if (row) {
-    row.classList.toggle('hidden', !focusBasin); row.classList.toggle('flex', !!focusBasin);
-    row.querySelectorAll('[data-fade]').forEach(b => b.classList.toggle('seg-on', (b.dataset.fade === '1') === focusFade));
-  }
+  setFocusData(ds.pm);
   renderPreview();
 });
 
@@ -536,7 +537,7 @@ function toggleSaveMenu(open) {
   open = open ?? m.classList.contains('hidden');
   m.classList.toggle('hidden', !open);
 }
-$('dsSave').onclick = e => { e.stopPropagation(); toggleSaveMenu(); };
+$('dsSave').onclick = e => { e.stopPropagation(); toggleFocusMenu(false); toggleSaveMenu(); };
 document.addEventListener('pointerdown', e => {
   if (!$('dsSaveMenu').classList.contains('hidden') && !e.target.closest('#dsSaveMenu, #dsSave')) toggleSaveMenu(false);
 });
