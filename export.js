@@ -366,7 +366,11 @@ function renderSettingsPanel() {
           <option value="">ไม่เน้น (แสดงทั้งหมด)</option>
           ${basinPts.map(f => `<option value="${f.properties.code}" ${focusBasin && focusBasin.code === f.properties.code ? 'selected' : ''}>${escapeHtml(f.properties.name)}</option>`).join('')}
         </select>
-      </label>`;
+      </label>
+      <div class="${focusBasin ? 'flex' : 'hidden'} items-center gap-3 px-3 -mt-1" data-focus-fade>
+        <span class="text-sm text-gray-600 flex-1">พื้นที่รอบนอก</span>
+        <div class="seg"><button data-fade="0" class="${focusFade ? '' : 'seg-on'}">ขาวทึบ</button><button data-fade="1" class="${focusFade ? 'seg-on' : ''}">ขาวจาง</button></div>
+      </div>`;
     html = `<div class="flex flex-col gap-2">${focusSel}${OVERLAYS.map(o => {
       const ls = s.layers[o.id];
       const isPoint = !POLY_ICONS.includes(o.icon) && !LINE_ICONS.includes(o.icon);
@@ -439,6 +443,8 @@ $('dsTabs').addEventListener('click', e => {
   renderSettingsPanel();
 });
 $('dsSheetBody').addEventListener('click', e => {
+  const fb = e.target.closest('[data-fade]');
+  if (fb) { setFocusFade(fb.dataset.fade === '1'); return; }
   if (e.target.closest('.switch, input')) return;   // สวิตช์/ช่องสี ไม่ใช่การกาง
   const h = e.target.closest('[data-expand]');
   if (!h) return;
@@ -486,6 +492,11 @@ focusListeners.push(() => {
   setBasinFocusData(ds.pm);
   const sel = $('dsFocusBasin');
   if (sel) sel.value = focusBasin ? focusBasin.code : '';
+  const row = $('dsSheetBody').querySelector('[data-focus-fade]');
+  if (row) {
+    row.classList.toggle('hidden', !focusBasin); row.classList.toggle('flex', !!focusBasin);
+    row.querySelectorAll('[data-fade]').forEach(b => b.classList.toggle('seg-on', (b.dataset.fade === '1') === focusFade));
+  }
   renderPreview();
 });
 

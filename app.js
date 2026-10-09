@@ -784,6 +784,8 @@ function fitTo(bounds) {
  * ============================================================ */
 const BASIN_FOCUS_WIDTH = ['interpolate', ['linear'], ['zoom'], 5, 2.5, 8, 3.5, 11, 5, 14, 6];
 let focusBasin = null;          // { code, name, feature, bbox, bounds } | null
+let focusFade = !!store.get('focus:fade', false);   // รอบนอก: false = ขาวทึบ · true = ขาวจาง (ยังเห็นแผนที่ด้านหลัง)
+const FOCUS_FADE_OPACITY = 0.7;
 const focusListeners = [];      // fn(focusBasin) — เช่น หน้าจัดวาง
 let basinAreasPromise = null;
 function loadBasinAreas() {     // ขอบเขตแบบพื้นที่ โหลดเมื่อเลือกลุ่มน้ำครั้งแรก
@@ -815,6 +817,14 @@ function setBasinFocusData(m) {
   if (!m || !m.getSource('basin-mask')) return;
   m.getSource('basin-mask').setData(basinMaskFC(focusBasin && focusBasin.feature));
   m.getSource('basin-focus').setData(focusBasin ? { type: 'FeatureCollection', features: [focusBasin.feature] } : emptyFC());
+  m.setPaintProperty('basin-mask-fill', 'fill-opacity', focusFade ? FOCUS_FADE_OPACITY : 1);
+}
+function setFocusFade(on) {
+  focusFade = !!on;
+  store.set('focus:fade', focusFade);
+  setBasinFocusData(map);
+  renderBasinChip();
+  focusListeners.forEach(fn => fn(focusBasin));
 }
 function pointInRing(x, y, r) {
   let c = false;
@@ -853,10 +863,16 @@ async function setFocusBasin(code, { fit = true } = {}) {
 function renderBasinChip() {
   $('basinChip').classList.toggle('hidden', !focusBasin);
   $('basinChip').classList.toggle('flex', !!focusBasin);
-  $('basinChipName').textContent = focusBasin ? focusBasin.name : '';
+  $('basinChipName').querySelector('span').textContent = focusBasin ? focusBasin.name : '';
+  const fb = $('basinChipFade');
+  fb.setAttribute('aria-pressed', String(focusFade));
+  fb.setAttribute('aria-label', focusFade ? 'รอบนอก: ขาวจาง (แตะเพื่อเป็นขาวทึบ)' : 'รอบนอก: ขาวทึบ (แตะเพื่อเป็นขาวจาง)');
+  fb.querySelector('[data-solid]').classList.toggle('hidden', focusFade);
+  fb.querySelector('[data-fade]').classList.toggle('hidden', !focusFade);
 }
 $('basinChipName').onclick = () => { if (focusBasin) fitTo(focusBasin.bounds); };
 $('basinChipClear').onclick = () => setFocusBasin(null);
+$('basinChipFade').onclick = () => { setFocusFade(!focusFade); toast(focusFade ? 'รอบนอกลุ่มน้ำ: ขาวจาง' : 'รอบนอกลุ่มน้ำ: ขาวทึบ'); };
 
 /* ============================================================
  *  แผง (sheet) เปิด/ปิด + ลากลงเพื่อปิด

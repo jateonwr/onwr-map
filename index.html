@@ -156,11 +156,14 @@
     <div class="flex items-center gap-2 mb-1 min-w-0">
       <img id="onwrLogo" src="assets/onwr-logo.png" alt="สำนักงานทรัพยากรน้ำแห่งชาติ (สทนช.)"
         class="flex-none w-12 h-auto drop-shadow-[0_1px_3px_rgba(255,255,255,0.9)] select-none" draggable="false" />
-      <!-- ลุ่มน้ำที่เน้นอยู่ (แตะชื่อ = ซูมไป · ✕ = เลิกเน้น) -->
+      <!-- ลุ่มน้ำที่เน้นอยู่ (แตะชื่อ = ซูมไป · ปุ่มกลาง = รอบนอกขาวทึบ/ขาวจาง · ✕ = เลิกเน้น) -->
       <div id="basinChip" class="hidden pointer-events-auto min-w-0 items-center bg-white rounded-full shadow-md h-9 pl-1 pr-0.5 text-sm">
         <button id="basinChipName" class="min-w-0 flex items-center gap-1.5 h-9 pl-2 pr-1 font-semibold text-teal-800">
           <svg class="w-4 h-4 flex-none" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-dasharray="4 2.5"><rect x="3.5" y="3.5" width="17" height="17" rx="3"/></svg>
           <span class="truncate"></span></button>
+        <button id="basinChipFade" aria-pressed="false" class="w-8 h-8 flex-none rounded-full grid place-items-center text-teal-800 active:bg-gray-100">
+          <svg data-solid class="w-[18px] h-[18px]" viewBox="0 0 24 24"><rect x="2.5" y="2.5" width="19" height="19" rx="3" fill="#fff" stroke="currentColor" stroke-width="2"/><circle cx="12" cy="12" r="5" fill="currentColor"/></svg>
+          <svg data-fade class="hidden w-[18px] h-[18px]" viewBox="0 0 24 24"><rect x="2.5" y="2.5" width="19" height="19" rx="3" fill="currentColor" fill-opacity=".3" stroke="currentColor" stroke-width="2"/><circle cx="12" cy="12" r="5" fill="currentColor"/></svg></button>
         <button id="basinChipClear" aria-label="เลิกเน้นลุ่มน้ำ" class="w-8 h-8 flex-none rounded-full grid place-items-center text-gray-500 active:bg-gray-100">
           <svg class="w-4 h-4" viewBox="0 0 24 24" fill="currentColor"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg></button>
       </div>
@@ -367,11 +370,11 @@
   <div id="toast" class="fixed left-1/2 -translate-x-1/2 safe-bottom mb-24 z-40 bg-gray-900 text-white text-sm rounded-lg px-4 py-2.5 shadow-lg hidden max-w-[90vw] text-center"></div>
 
   <!-- เปลี่ยนเลข ?v= ทุกครั้งที่แก้ไฟล์ .js เพื่อให้มือถือโหลดไฟล์ใหม่ -->
-  <script src="app.js?v=60"></script>
-  <script src="sheet.js?v=60"></script>
-  <script src="track.js?v=60"></script>
-  <script src="measure.js?v=60"></script>
-  <script src="export-render.js?v=60"></script>
-  <script src="export.js?v=60"></script>
+  <script src="app.js?v=61"></script>
+  <script src="sheet.js?v=61"></script>
+  <script src="track.js?v=61"></script>
+  <script src="measure.js?v=61"></script>
+  <script src="export-render.js?v=61"></script>
+  <script src="export.js?v=61"></script>
 </body>
 </html>
