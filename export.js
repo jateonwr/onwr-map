@@ -367,9 +367,8 @@ function renderSettingsPanel() {
         `<span class="w-8 h-8 rounded-lg flex-none bg-gray-100 grid place-items-center" data-icon="${o.id}">${icon}</span>
          <div class="flex-1 min-w-0 text-sm font-medium truncate">${o.name}</div>${toggle(`layers.${o.id}.on`, ls.on)}`,
         `${isPoint ? slider(`layers.${o.id}.iconSize`, ls.iconSize, 0.5, 3, 0.1, 'ขนาดไอคอน') : slider(`layers.${o.id}.width`, ls.width, 0.5, 3, 0.1, 'ความหนา')}
-         <div class="flex gap-5">${colorInput(`layers.${o.id}.fillColor`, ls.fillColor, isPoint ? 'สีไอคอน' : 'สีพื้น')}${colorInput(`layers.${o.id}.lineColor`, ls.lineColor, 'สีเส้น')}</div>
-         ${o.lineStyle ? `<div class="flex items-center gap-2 text-xs text-gray-600"><span class="w-16 flex-none">ชนิดเส้น</span>
-           <div class="seg"><button data-dash="${o.id}:solid" class="${ls.dash !== 'dash' ? 'seg-on' : ''}">เส้นทึบ</button><button data-dash="${o.id}:dash" class="${ls.dash === 'dash' ? 'seg-on' : ''}">เส้นประ</button></div></div>` : ''}`);
+         <div class="flex flex-wrap items-center gap-x-5 gap-y-2">${colorInput(`layers.${o.id}.fillColor`, ls.fillColor, isPoint ? 'สีไอคอน' : 'สีพื้น')}${colorInput(`layers.${o.id}.lineColor`, ls.lineColor, 'สีเส้น')}
+           ${o.lineStyle ? `<div class="seg ml-auto" title="ชนิดเส้น"><button data-dash="${o.id}:solid" class="${ls.dash !== 'dash' ? 'seg-on' : ''}">เส้นทึบ</button><button data-dash="${o.id}:dash" class="${ls.dash === 'dash' ? 'seg-on' : ''}">เส้นประ</button></div>` : ''}</div>`);
     }).join('')}</div>`;
   } else if (ds.tab === 'labels') {
     html = `<div class="flex flex-col gap-2">${Object.entries(LABEL_CLASS_NAMES).map(([cls, name]) => {
