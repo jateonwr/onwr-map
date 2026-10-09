@@ -5,7 +5,7 @@
  *  หน่วยจัดวาง = "มม. บน A2" (420×594) · U = px ต่อ มม. ของ canvas ที่กำลังวาด
  * ============================================================ */
 
-const PAPER = { A2: [420, 594], A3: [297, 420] };   // mm แนวตั้ง
+const PAPER = { A2: [420, 594], A3: [297, 420], A4: [210, 297] };   // mm แนวตั้ง
 const PAGE_BASE = [420, 594];                        // หน้ากระดาษในหน่วยจัดวาง (ทุกขนาดใช้สัดส่วนเดียวกัน) แนวตั้ง
 const isLandscape = s => s.orient === 'landscape';
 const pageMm = s => isLandscape(s) ? [PAGE_BASE[1], PAGE_BASE[0]] : [PAGE_BASE[0], PAGE_BASE[1]];   // [กว้าง, สูง] หน่วยจัดวาง
@@ -24,7 +24,7 @@ const LABEL_CLASS_NAMES = {
   'tung-label': 'ชื่อทุ่งรับน้ำ', 'water-label': 'ชื่อเขื่อน / อาคารบังคับน้ำ', 'river-label': 'ชื่อแม่น้ำ',
   'stn-label': 'รหัสสถานี', 'visit-label': 'จุดลงพื้นที่', 'prov-label': 'ชื่อจังหวัด', 'basin-label': 'ชื่อลุ่มน้ำหลัก',
 };
-const BOX_NAMES = { logo: 'โลโก้', table: 'ตาราง', legend: 'สัญลักษณ์', north: 'ลูกศรทิศเหนือ', scalebar: 'มาตราส่วน' };
+const BOX_NAMES = { title: 'ชื่อแผนที่', logo: 'โลโก้', table: 'ตาราง', legend: 'สัญลักษณ์', north: 'ลูกศรทิศเหนือ', scalebar: 'มาตราส่วน' };
 // คอลัมน์ตาราง 11 ทุ่ง (w = มม. บน A2 ที่ขนาดกล่อง 1×) — "name" แสดงเสมอ
 const TABLE_COLS = [
   { key: 'no', w: 9, t: 'ลำดับที่', name: 'ลำดับที่' },
@@ -51,6 +51,7 @@ function defaultExportSettings() {
   return {
     paper: 'A2',
     orient: 'portrait',
+    title: '', titleBg: true,
     layers: Object.fromEntries(OVERLAYS.map(o => [o.id, { on: overlayState[o.id].visible, width: 1, iconSize: 1, ...layerColorDefaults(o), ...(o.lineStyle ? { dash: o.lineStyle } : {}) }])),
     labels: Object.fromEntries(Object.entries(LABEL_STYLES).map(([k, s]) => [k, { on: true, size: 1, color: s.color }])),
     table: { on: true, cols: Object.fromEntries(TABLE_COLS.map(c => [c.key, true])), totals: true },
@@ -61,7 +62,8 @@ function defaultExportSettings() {
 function mergeSettings(stored) {
   const d = defaultExportSettings();
   if (!stored) return d;
-  const out = { ...d, paper: PAPER[stored.paper] ? stored.paper : d.paper, orient: stored.orient === 'landscape' ? 'landscape' : 'portrait' };
+  const out = { ...d, paper: PAPER[stored.paper] ? stored.paper : d.paper, orient: stored.orient === 'landscape' ? 'landscape' : 'portrait',
+    title: typeof stored.title === 'string' ? stored.title : '', titleBg: stored.titleBg !== false };
   for (const grp of ['layers', 'labels']) {
     for (const k of Object.keys(d[grp])) out[grp][k] = { ...d[grp][k], ...(stored[grp] && stored[grp][k] || {}) };
   }
@@ -236,6 +238,14 @@ function buildPage(ctx, m, U, settings, layout, refZoom) {
     return b;
   };
   const Ub = type => U * boxScale(lb, type);
+  const titleText = (settings.title || '').trim();
+  if (titleText) {   // ชื่อแผนที่: กลางบน · ยาวเกินหน้ากระดาษจะย่อตัวอักษรให้พอดี (ขนาดเริ่มต้นเท่านั้น)
+    const w1 = measure(ctx, titleText, 9 * U, 700) + 10 * U;
+    const k = Math.min(1, (PW - 2 * EDGE_MM) * U / w1);
+    const u = Ub('title') * k, fs = 9 * u;
+    const w = measure(ctx, titleText, fs, 700) + 10 * u;
+    place('title', w, fs * 1.55, PW / 2 - w / U / 2, EDGE_MM).spec = { text: titleText, fs, bg: settings.titleBg !== false };
+  }
   if (settings.furniture.logo && exportAssets.logo) {
     const w = 34 * Ub('logo'), h = w * exportAssets.logo.height / exportAssets.logo.width;
     place('logo', w, h, EDGE_MM, EDGE_MM);
@@ -355,7 +365,8 @@ function drawPage(ctx, m, U, settings, page, { editing = false, selected = null,
 
   for (const b of page.boxes) {
     const bw = b.x2 - b.x1, bh = b.y2 - b.y1;
-    if (b.type === 'logo') ctx.drawImage(exportAssets.logo, b.x1, b.y1, bw, bh);
+    if (b.type === 'title') drawTitle(ctx, b, v => v * U * b.s);
+    else if (b.type === 'logo') ctx.drawImage(exportAssets.logo, b.x1, b.y1, bw, bh);
     else if (b.type === 'table') drawTable(ctx, b, v => v * U * b.s);
     else if (b.type === 'legend') drawLegend(ctx, b, settings, v => v * U * b.s);
     else if (b.type === 'north') drawNorth(ctx, b, v => v * U * b.s);
@@ -461,6 +472,18 @@ function drawLegend(ctx, b, settings, mm) {
     ctx.fillStyle = '#374151'; ctx.font = `500 ${s.fs * 0.9}px ${FONT_TH}`;
     ctx.fillText(s.dateText, x0 + s.pad, y0 + s.h - s.fs * 1.2);
   }
+}
+
+function drawTitle(ctx, b) {
+  const s = b.spec, w = b.x2 - b.x1, h = b.y2 - b.y1;
+  if (!s.bg) {   // ไม่มีพื้นหลัง: ตัวอักษรมีขอบขาว (mask) ให้อ่านออกบนแผนที่
+    haloText(ctx, s.text, b.x1 + w / 2, b.y1 + h / 2, { size: s.fs, weight: 700, color: '#111827', halo: s.fs * 0.16 });
+    return;
+  }
+  ctx.fillStyle = 'rgba(255,255,255,0.92)'; ctx.fillRect(b.x1, b.y1, w, h);
+  ctx.strokeStyle = '#374151'; ctx.lineWidth = Math.max(0.5, s.fs * 0.045); ctx.strokeRect(b.x1, b.y1, w, h);
+  ctx.fillStyle = '#111827'; ctx.font = `700 ${s.fs}px ${FONT_TH}`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.fillText(s.text, b.x1 + w / 2, b.y1 + h / 2);
 }
 
 function drawNorth(ctx, b, mm) {

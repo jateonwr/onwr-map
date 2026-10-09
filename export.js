@@ -35,6 +35,8 @@ async function openDesigner() {
   setMode('map');
   updatePaperButtons();
   updateFocusButton();
+  $('dsTitle').value = ds.settings.title || '';
+  setTitleBg(ds.settings.titleBg !== false);
   await Promise.all([document.fonts.load(`600 16px ${FONT_TH}`), document.fonts.load(`700 16px ${FONT_TH}`)]);
   await loadExportAssets(ds.settings);
   if (!ds.open) return;
@@ -175,10 +177,13 @@ function hitTest(p) {
   const sel = ds.selected && ds.page.labels.find(l => l.key === ds.selected && !l.hidden);
   if (sel && distToBox(p, sel.x - sel.bw / 2, sel.y - sel.bh / 2, sel.x + sel.bw / 2, sel.y + sel.bh / 2) <= 24 / ds.zoom) return { type: 'label', label: sel };
   // ป้ายที่ใกล้ที่สุดภายใน 18 px บนจอ (ป้ายอยู่บนกล่อง จึงเช็กก่อน)
+  // จุดอยู่ในกล่องเต็ม ๆ → กล่องมาก่อน ยกเว้นแตะโดนตัวป้ายโดยตรง (ป้ายใกล้เคียงไม่ควรแย่งกล่องบาง ๆ อย่างชื่อแผนที่)
+  const inBox = ds.page.boxes.some(b => p.x >= b.x1 && p.x <= b.x2 && p.y >= b.y1 && p.y <= b.y2);
   let best = null, bestD = 18 / ds.zoom;
   for (const l of ds.page.labels) {
     if (l.hidden) continue;
     const d = distToBox(p, l.x - l.bw / 2, l.y - l.bh / 2, l.x + l.bw / 2, l.y + l.bh / 2);
+    if (inBox && d > 0) continue;
     if (d < bestD) { bestD = d; best = l; }
   }
   if (best) return { type: 'label', label: best };
@@ -400,7 +405,10 @@ function renderSettingsPanel() {
   } else {
     const furn = [['logo', 'โลโก้ สทนช.'], ['north', 'ลูกศรทิศเหนือ'], ['scalebar', 'มาตราส่วน'], ['date', 'ข้อมูล ณ วันที่ (ในกล่องสัญลักษณ์)']]
       .map(([k, n]) => `<div class="flex items-center gap-3 min-h-[44px] border-b border-gray-100"><div class="flex-1 text-sm">${n}</div>${toggle(`furniture.${k}`, s.furniture[k])}</div>`).join('');
-    html = `${furn}
+    html = `<label class="block text-sm font-medium mb-1" for="dsTitleField">ชื่อแผนที่</label>
+      <input id="dsTitleField" type="text" maxlength="100" value="${escapeHtml(s.title || '')}" placeholder="พิมพ์ชื่อแผนที่ (แสดงกลางบน ลากย้ายได้)" class="w-full h-11 rounded-xl border border-gray-300 px-3 text-sm mb-1">
+      <label class="flex items-center gap-3 min-h-[44px] border-b border-gray-100"><span class="flex-1 text-sm">พื้นหลังชื่อแผนที่ <span class="text-xs text-gray-400">(ปิด = ตัวอักษรขอบขาว)</span></span><span class="switch"><input type="checkbox" id="dsTitleBgField" ${s.titleBg !== false ? 'checked' : ''}><span></span></span></label>
+      ${furn}
       <button id="dsUnhide" class="mt-4 w-full h-10 rounded-xl bg-gray-100 text-sm text-gray-800 active:bg-gray-200"></button>
       <button id="dsResetBoxes" class="mt-2 w-full h-10 rounded-xl bg-gray-100 text-sm text-gray-800 active:bg-gray-200">คืนขนาด/ตำแหน่งกล่องทั้งหมด</button>
       <button id="dsResetAll" class="mt-2 w-full h-10 rounded-xl bg-red-50 text-sm font-medium text-red-700 active:bg-red-100">รีเซ็ตการจัดวางทั้งหมด</button>`;
@@ -477,6 +485,23 @@ $('dsSheetBody').addEventListener('input', async e => {
   scheduleRender();
 });
 
+/* ---------- ชื่อแผนที่: ช่องบนแถบหัว (จอกว้าง) + ช่องในแท็บ "อื่น ๆ" ใช้ค่าเดียวกัน ---------- */
+function setMapTitle(v, source) {
+  ds.settings.title = v; saveExportState();
+  for (const id of ['dsTitle', 'dsTitleField']) { const el = $(id); if (el && el !== source && el.value !== v) el.value = v; }
+  scheduleRender();
+}
+$('dsTitle').addEventListener('input', e => setMapTitle(e.target.value, e.target));
+function setTitleBg(on) {
+  ds.settings.titleBg = on; saveExportState();
+  $('dsTitleBg').setAttribute('aria-pressed', String(on)); $('dsTitleBg').classList.toggle('seg-on', on);
+  const f = $('dsTitleBgField'); if (f) f.checked = on;
+  scheduleRender();
+}
+$('dsTitleBg').onclick = () => setTitleBg(ds.settings.titleBg === false);
+$('dsSheetBody').addEventListener('change', e => { if (e.target.id === 'dsTitleBgField') setTitleBg(e.target.checked); });
+$('dsSheetBody').addEventListener('input', e => { if (e.target.id === 'dsTitleField') setMapTitle(e.target.value, e.target); });
+
 /* ---------- เน้นพื้นที่ (ลุ่มน้ำ / จังหวัด) ปุ่มบนแถบเครื่องมือ — สถานะเดียวกับแผนที่หลัก ---------- */
 async function focusFromDesigner(key) {
   await setFocusArea(key || null, { fit: false });
@@ -509,6 +534,8 @@ async function resetDesigner() {
   saveExportState();
   await loadExportAssets(ds.settings);
   if (ds.pm && ds.pm.getSource('tung')) { setPointIcons(ds.pm, ds.settings); applyPreviewStyle(); }
+  $('dsTitle').value = '';
+  setTitleBg(true);
   renderSettingsPanel(); selectLabel(null); renderPreview();
 }
 
