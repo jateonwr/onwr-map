@@ -238,13 +238,14 @@ function buildPage(ctx, m, U, settings, layout, refZoom) {
     return b;
   };
   const Ub = type => U * boxScale(lb, type);
-  const titleText = (settings.title || '').trim();
-  if (titleText) {   // ชื่อแผนที่: กลางบน · ยาวเกินหน้ากระดาษจะย่อตัวอักษรให้พอดี (ขนาดเริ่มต้นเท่านั้น)
-    const w1 = measure(ctx, titleText, 9 * U, 700) + 10 * U;
+  const titleLines = (settings.title || '').replace(/\r/g, '').trim().split('\n').map(l => l.trim());
+  if (titleLines.some(Boolean)) {   // ชื่อแผนที่ (หลายบรรทัดได้): กลางบน · บรรทัดยาวเกินหน้ากระดาษจะย่อตัวอักษรให้พอดี (ขนาดเริ่มต้นเท่านั้น)
+    const widest = (fs, ls = titleLines) => Math.max(...ls.map(l => measure(ctx, l || ' ', fs, 700)));
+    const w1 = widest(9 * U) + 10 * U;
     const k = Math.min(1, (PW - 2 * EDGE_MM) * U / w1);
     const u = Ub('title') * k, fs = 9 * u;
-    const w = measure(ctx, titleText, fs, 700) + 10 * u;
-    place('title', w, fs * 1.55, PW / 2 - w / U / 2, EDGE_MM).spec = { text: titleText, fs, bg: settings.titleBg !== false };
+    const w = widest(fs) + 10 * u, lineH = fs * 1.3;
+    place('title', w, lineH * titleLines.length + fs * 0.25, PW / 2 - w / U / 2, EDGE_MM).spec = { lines: titleLines, fs, lineH, bg: settings.titleBg !== false };
   }
   if (settings.furniture.logo && exportAssets.logo) {
     const w = 34 * Ub('logo'), h = w * exportAssets.logo.height / exportAssets.logo.width;
@@ -476,14 +477,15 @@ function drawLegend(ctx, b, settings, mm) {
 
 function drawTitle(ctx, b) {
   const s = b.spec, w = b.x2 - b.x1, h = b.y2 - b.y1;
+  const y0 = b.y1 + (h - s.lineH * s.lines.length) / 2 + s.lineH / 2;   // กลางบรรทัดแรก
   if (!s.bg) {   // ไม่มีพื้นหลัง: ตัวอักษรมีขอบขาว (mask) ให้อ่านออกบนแผนที่
-    haloText(ctx, s.text, b.x1 + w / 2, b.y1 + h / 2, { size: s.fs, weight: 700, color: '#111827', halo: s.fs * 0.16 });
+    s.lines.forEach((ln, i) => ln && haloText(ctx, ln, b.x1 + w / 2, y0 + i * s.lineH, { size: s.fs, weight: 700, color: '#111827', halo: s.fs * 0.16 }));
     return;
   }
   ctx.fillStyle = 'rgba(255,255,255,0.92)'; ctx.fillRect(b.x1, b.y1, w, h);
   ctx.strokeStyle = '#374151'; ctx.lineWidth = Math.max(0.5, s.fs * 0.045); ctx.strokeRect(b.x1, b.y1, w, h);
   ctx.fillStyle = '#111827'; ctx.font = `700 ${s.fs}px ${FONT_TH}`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-  ctx.fillText(s.text, b.x1 + w / 2, b.y1 + h / 2);
+  s.lines.forEach((ln, i) => ctx.fillText(ln, b.x1 + w / 2, y0 + i * s.lineH));
 }
 
 function drawNorth(ctx, b, mm) {

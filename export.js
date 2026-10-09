@@ -35,7 +35,7 @@ async function openDesigner() {
   setMode('map');
   updatePaperButtons();
   updateFocusButton();
-  $('dsTitle').value = ds.settings.title || '';
+  $('dsTitle').value = ds.settings.title || ''; fitTitleBox(false);
   setTitleBg(ds.settings.titleBg !== false);
   await Promise.all([document.fonts.load(`600 16px ${FONT_TH}`), document.fonts.load(`700 16px ${FONT_TH}`)]);
   await loadExportAssets(ds.settings);
@@ -406,7 +406,7 @@ function renderSettingsPanel() {
     const furn = [['logo', 'โลโก้ สทนช.'], ['north', 'ลูกศรทิศเหนือ'], ['scalebar', 'มาตราส่วน'], ['date', 'ข้อมูล ณ วันที่ (ในกล่องสัญลักษณ์)']]
       .map(([k, n]) => `<div class="flex items-center gap-3 min-h-[44px] border-b border-gray-100"><div class="flex-1 text-sm">${n}</div>${toggle(`furniture.${k}`, s.furniture[k])}</div>`).join('');
     html = `<label class="block text-sm font-medium mb-1" for="dsTitleField">ชื่อแผนที่</label>
-      <input id="dsTitleField" type="text" maxlength="100" value="${escapeHtml(s.title || '')}" placeholder="พิมพ์ชื่อแผนที่ (แสดงกลางบน ลากย้ายได้)" class="w-full h-11 rounded-xl border border-gray-300 px-3 text-sm mb-1">
+      <textarea id="dsTitleField" rows="3" maxlength="200" placeholder="พิมพ์ชื่อแผนที่ (หลายบรรทัดได้ · แสดงกลางบน ลากย้ายได้)" class="w-full rounded-xl border border-gray-300 px-3 py-2 text-sm leading-6 mb-1">${escapeHtml(s.title || '')}</textarea>
       <label class="flex items-center gap-3 min-h-[44px] border-b border-gray-100"><span class="flex-1 text-sm">พื้นหลังชื่อแผนที่ <span class="text-xs text-gray-400">(ปิด = ตัวอักษรขอบขาว)</span></span><span class="switch"><input type="checkbox" id="dsTitleBgField" ${s.titleBg !== false ? 'checked' : ''}><span></span></span></label>
       ${furn}
       <button id="dsUnhide" class="mt-4 w-full h-10 rounded-xl bg-gray-100 text-sm text-gray-800 active:bg-gray-200"></button>
@@ -486,9 +486,20 @@ $('dsSheetBody').addEventListener('input', async e => {
 });
 
 /* ---------- ชื่อแผนที่: ช่องบนแถบหัว (จอกว้าง) + ช่องในแท็บ "อื่น ๆ" ใช้ค่าเดียวกัน ---------- */
+/* ช่องบนแถบหัวขยายเป็นหลายบรรทัดตอนพิมพ์ (ลอยทับพื้นที่แผนที่) แล้วย่อกลับเป็นบรรทัดเดียวเมื่อพิมพ์เสร็จ */
+function fitTitleBox(expand) {
+  const t = $('dsTitle');
+  t.style.height = 'auto';
+  t.style.height = (expand ? Math.min(t.scrollHeight, 20 * 6 + 16) : 36) + 'px';
+  t.style.overflowY = expand && t.scrollHeight > 136 ? 'auto' : 'hidden';
+  if (!expand) t.scrollTop = 0;
+}
+$('dsTitle').addEventListener('focus', () => fitTitleBox(true));
+$('dsTitle').addEventListener('blur', () => fitTitleBox(false));
 function setMapTitle(v, source) {
   ds.settings.title = v; saveExportState();
   for (const id of ['dsTitle', 'dsTitleField']) { const el = $(id); if (el && el !== source && el.value !== v) el.value = v; }
+  fitTitleBox(document.activeElement === $('dsTitle'));
   scheduleRender();
 }
 $('dsTitle').addEventListener('input', e => setMapTitle(e.target.value, e.target));
