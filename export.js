@@ -17,8 +17,9 @@ const isWide = () => matchMedia('(min-width: 768px)').matches;
 function loadExportState() {
   ds.settings = mergeSettings(store.get('export:settings', null));
   const l = store.get('export:layout', null) || {};
-  ds.layout = { boxes: l.boxes || {}, labels: l.labels || {} };
+  ds.layout = { boxes: l.boxes || {}, boxesL: l.boxesL || {}, labels: l.labels || {} };
 }
+const curBoxes = () => layoutBoxes(ds.layout, ds.settings);
 const saveExportState = () => { store.set('export:settings', ds.settings); store.set('export:layout', ds.layout); };
 
 /* ---------- เปิด / ปิด ---------- */
@@ -46,6 +47,7 @@ async function openDesigner() {
   pm.once('load', () => {
     addMapImages(pm, pointIconColors(ds.settings));
     addOverlayLayers(pm);
+    addBasinFocusLayers(pm);
     applyPreviewStyle();
     pm.on('movestart', () => { $('dsCanvas').style.opacity = '0.35'; });
     pm.on('moveend', () => { applyPreviewStyle(); renderPreview(); });
@@ -66,9 +68,10 @@ $('dsClose').onclick = closeDesigner;
 function layoutDesignerPage() {
   const area = $('dsArea');
   const aw = area.clientWidth - 8, ah = area.clientHeight - 8;
-  ds.pageW = Math.max(100, Math.floor(Math.min(aw, ah * PAGE_MM[0] / PAGE_MM[1])));
-  ds.pageH = Math.round(ds.pageW * PAGE_MM[1] / PAGE_MM[0]);
-  ds.U = ds.pageW / PAGE_MM[0];
+  const [PW, PH] = pageMm(ds.settings);
+  ds.pageW = Math.max(100, Math.floor(Math.min(aw, ah * PW / PH)));
+  ds.pageH = Math.round(ds.pageW * PH / PW);
+  ds.U = ds.pageW / PW;
   ds.ox = Math.round((area.clientWidth - ds.pageW) / 2);
   ds.oy = Math.round((area.clientHeight - ds.pageH) / 2);
   const page = $('dsPage');
@@ -121,7 +124,16 @@ document.querySelectorAll('#designer [data-mode]').forEach(b => b.onclick = () =
 
 function updatePaperButtons() {
   document.querySelectorAll('#designer [data-paper]').forEach(b => b.classList.toggle('seg-on', b.dataset.paper === ds.settings.paper));
+  document.querySelectorAll('#designer [data-orient]').forEach(b => b.classList.toggle('seg-on', b.dataset.orient === ds.settings.orient));
 }
+/* สลับแนวตั้ง/แนวนอน: จัดหน้าตัวอย่างใหม่ (ตำแหน่งกล่องแยกเก็บตามแนว) */
+document.querySelectorAll('#designer [data-orient]').forEach(b => b.onclick = () => {
+  if (ds.settings.orient === b.dataset.orient) return;
+  ds.settings.orient = b.dataset.orient;
+  ds.selectedBox = null; ds.zoom = 1; ds.pan = { x: 0, y: 0 };
+  saveExportState(); updatePaperButtons(); selectLabel(null);
+  layoutDesignerPage();
+});
 document.querySelectorAll('#designer [data-paper]').forEach(b => b.onclick = () => {
   ds.settings.paper = b.dataset.paper; saveExportState(); updatePaperButtons();
 });
@@ -195,7 +207,7 @@ dsArea.addEventListener('pointerdown', e => {
       if (ds.selected) selectLabel(null);
     } else if (hit) {
       const orig = hit.type === 'box'
-        ? { ...(ds.layout.boxes[hit.box.type] || {}), x: hit.box.x1 / ds.U, y: hit.box.y1 / ds.U }
+        ? { ...(curBoxes()[hit.box.type] || {}), x: hit.box.x1 / ds.U, y: hit.box.y1 / ds.U }
         : pinOf(hit.label);
       // ป้ายที่เลือกอยู่แล้ว / กล่องที่เลือกอยู่แล้ว: ลากได้ทันที ไม่ต้องรอระยะเริ่ม
       const instant = (hit.type === 'label' && hit.label.key === ds.selected) || (hit.type === 'box' && hit.box.type === ds.selectedBox);
@@ -228,7 +240,7 @@ dsArea.addEventListener('pointermove', e => {
     const w = g.baseW * s, h = g.baseH * s;
     const x1 = c === 'nw' || c === 'sw' ? g.opp[0] - w : g.opp[0];
     const y1 = c === 'nw' || c === 'ne' ? g.opp[1] - h : g.opp[1];
-    ds.layout.boxes[g.hit.box.type] = { x: x1 / ds.U, y: y1 / ds.U, s };
+    curBoxes()[g.hit.box.type] = { x: x1 / ds.U, y: y1 / ds.U, s };
     g.moved = true;
     scheduleRender();
   } else if (gesture.type === 'drag') {
@@ -237,7 +249,7 @@ dsArea.addEventListener('pointermove', e => {
     if (!gesture.moved && !gesture.instant && Math.hypot(dx, dy) * ds.zoom < 4) return;
     gesture.moved = true;
     if (gesture.hit.type === 'box') {
-      ds.layout.boxes[gesture.hit.box.type] = { ...gesture.orig, x: gesture.orig.x + dx / ds.U, y: gesture.orig.y + dy / ds.U };
+      curBoxes()[gesture.hit.box.type] = { ...gesture.orig, x: gesture.orig.x + dx / ds.U, y: gesture.orig.y + dy / ds.U };
       ds.selectedBox = gesture.hit.box.type;
     } else {
       ds.layout.labels[gesture.hit.label.key] = { ...gesture.orig, dx: gesture.orig.dx + dx / ds.U, dy: gesture.orig.dy + dy / ds.U };
@@ -346,7 +358,16 @@ function renderSettingsPanel() {
   $('dsTabs').innerHTML = TABS.map(([k, n]) => `<button data-tab="${k}" class="${ds.tab === k ? 'seg-on' : ''}">${n}</button>`).join('');
   let html = '';
   if (ds.tab === 'layers') {
-    html = `<div class="flex flex-col gap-2">${OVERLAYS.map(o => {
+    const basinPts = (overlayState.basins.data ? overlayState.basins.data.features : []).filter(f => f.properties.code);
+    const focusSel = `
+      <label class="flex items-center gap-3 rounded-2xl border border-teal-600/40 bg-teal-50/60 px-3 min-h-[48px]">
+        <span class="text-sm font-medium text-teal-900 flex-none">เน้นลุ่มน้ำ</span>
+        <select id="dsFocusBasin" class="flex-1 min-w-0 h-9 rounded-lg border border-gray-300 bg-white px-2 text-sm">
+          <option value="">ไม่เน้น (แสดงทั้งหมด)</option>
+          ${basinPts.map(f => `<option value="${f.properties.code}" ${focusBasin && focusBasin.code === f.properties.code ? 'selected' : ''}>${escapeHtml(f.properties.name)}</option>`).join('')}
+        </select>
+      </label>`;
+    html = `<div class="flex flex-col gap-2">${focusSel}${OVERLAYS.map(o => {
       const ls = s.layers[o.id];
       const isPoint = !POLY_ICONS.includes(o.icon) && !LINE_ICONS.includes(o.icon);
       const icon = layerIcon({ icon: o.icon, swatch: ls.fillColor || ls.lineColor || o.swatch, outline: ls.lineColor || o.outline }, 22);
@@ -388,13 +409,16 @@ function renderSettingsPanel() {
       .map(([k, n]) => `<div class="flex items-center gap-3 min-h-[44px] border-b border-gray-100"><div class="flex-1 text-sm">${n}</div>${toggle(`furniture.${k}`, s.furniture[k])}</div>`).join('');
     html = `${furn}
       <button id="dsUnhide" class="mt-4 w-full h-10 rounded-xl bg-gray-100 text-sm text-gray-800 active:bg-gray-200"></button>
-      <button id="dsResetBoxes" class="mt-2 w-full h-10 rounded-xl bg-gray-100 text-sm text-gray-800 active:bg-gray-200">คืนขนาด/ตำแหน่งกล่องทั้งหมด</button>`;
+      <button id="dsResetBoxes" class="mt-2 w-full h-10 rounded-xl bg-gray-100 text-sm text-gray-800 active:bg-gray-200">คืนขนาด/ตำแหน่งกล่องทั้งหมด</button>
+      <button id="dsResetAll" class="mt-2 w-full h-10 rounded-xl bg-red-50 text-sm font-medium text-red-700 active:bg-red-100">รีเซ็ตการจัดวางทั้งหมด</button>`;
   }
   $('dsSheetBody').innerHTML = html;
   $('dsSheetBody').scrollTop = 0;
   renderHiddenCount();
+  const ra = $('dsResetAll');
+  if (ra) ra.onclick = resetDesigner;
   const rb = $('dsResetBoxes');
-  if (rb) rb.onclick = () => { ds.layout.boxes = {}; ds.selectedBox = null; saveExportState(); renderPreview(); };
+  if (rb) rb.onclick = () => { ds.layout.boxes = {}; ds.layout.boxesL = {}; ds.selectedBox = null; saveExportState(); renderPreview(); };
   const un = $('dsUnhide');
   if (un) un.onclick = () => {
     for (const [k, v] of Object.entries(ds.layout.labels)) { if (v.hidden) { delete v.hidden; if (v.dx == null) delete ds.layout.labels[k]; } }
@@ -426,6 +450,7 @@ $('dsSheetBody').addEventListener('click', e => {
 
 const setPath = (obj, path, v) => { const ks = path.split('.'); let o = obj; for (const k of ks.slice(0, -1)) o = o[k]; o[ks[ks.length - 1]] = v; };
 $('dsSheetBody').addEventListener('input', async e => {
+  if (e.target.id === 'dsFocusBasin') { focusBasinFromDesigner(e.target.value); return; }
   const path = e.target.dataset.path;
   if (!path) return;
   const v = e.target.type === 'checkbox' ? e.target.checked : e.target.type === 'range' ? +e.target.value : e.target.value;
@@ -448,17 +473,33 @@ $('dsSheetBody').addEventListener('input', async e => {
   scheduleRender();
 });
 
+/* ---------- เน้นลุ่มน้ำ (สถานะเดียวกับแผนที่หลัก) ---------- */
+async function focusBasinFromDesigner(code) {
+  await setFocusBasin(code || null, { fit: false });
+  if (focusBasin && ds.pm) {
+    const pad = Math.round(ds.U * (PAGE_MARGIN_MM + 10));
+    ds.pm.fitBounds(focusBasin.bounds, { padding: pad, duration: 0 });
+  }
+}
+focusListeners.push(() => {
+  if (!ds.open || !ds.pm) return;
+  setBasinFocusData(ds.pm);
+  const sel = $('dsFocusBasin');
+  if (sel) sel.value = focusBasin ? focusBasin.code : '';
+  renderPreview();
+});
+
 /* ---------- รีเซ็ต ---------- */
-$('dsReset').onclick = async () => {
+async function resetDesigner() {
   if (!await confirmModal('รีเซ็ตการจัดวางทั้งหมด?\nชั้นข้อมูล สี ขนาด และตำแหน่งที่ย้ายไว้จะกลับเป็นค่าเริ่มต้น', { ok: 'รีเซ็ต', danger: true })) return;
-  const paper = ds.settings.paper;
-  ds.settings = mergeSettings(null); ds.settings.paper = paper;
-  ds.layout = { boxes: {}, labels: {} };
+  const { paper, orient } = ds.settings;
+  ds.settings = mergeSettings(null); ds.settings.paper = paper; ds.settings.orient = orient;
+  ds.layout = { boxes: {}, boxesL: {}, labels: {} };
   saveExportState();
   await loadExportAssets(ds.settings);
   if (ds.pm && ds.pm.getSource('tung')) { setPointIcons(ds.pm, ds.settings); applyPreviewStyle(); }
   renderSettingsPanel(); selectLabel(null); renderPreview();
-};
+}
 
 /* ---------- บันทึกภาพ ---------- */
 function showProgress(title) {

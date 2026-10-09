@@ -84,6 +84,14 @@
                    1.5px 1.5px 0 #fff, 0 1.5px 0 #fff, -1.5px 1.5px 0 #fff, -1.5px 0 0 #fff;
     }
     .prov-label .c, .prov-label .v { display: none; }
+    .basin-label {
+      font: 700 calc(14px * var(--ls, 1))/1.2 "Noto Sans Thai", system-ui, sans-serif; color: #0f766e; white-space: nowrap;
+      letter-spacing: .03em; pointer-events: none; text-align: center;
+      text-shadow: -2px -2px 0 #fff, 0 -2px 0 #fff, 2px -2px 0 #fff, 2px 0 0 #fff,
+                   2px 2px 0 #fff, 0 2px 0 #fff, -2px 2px 0 #fff, -2px 0 0 #fff;
+    }
+    .basin-label .c, .basin-label .v { display: none; }
+    #map .basin-label { pointer-events: auto; cursor: pointer; }
     .tung-label .c { font-size: calc(13px * var(--ls, 1)); font-weight: 600; margin-top: 1px; }
     .tung-label .c:empty, .water-label .c:empty, .stn-label .c:empty { display: none; }
     /* ค่าจาก Google Sheet ใต้ชื่อทุ่ง */
@@ -110,7 +118,7 @@
 
     /* หน้าจัดวางภาพ (export designer) */
     #designer .seg { display: flex; background: #f3f4f6; border-radius: 999px; padding: 2px; }
-    #designer .seg button { height: 32px; padding: 0 9px; border-radius: 999px; font-size: 12px; font-weight: 600; color: #374151; white-space: nowrap; }
+    #designer .seg button { height: 32px; padding: 0 7px; border-radius: 999px; font-size: 12px; font-weight: 600; color: #374151; white-space: nowrap; }
     #designer .seg button.seg-on { background: #1a73e8; color: #fff; }
     #designer .seg.justify-between button { flex: 1; padding: 0 4px; }
     #designer #dsSettings.seg-on { background: #1a73e8; color: #fff; }
@@ -145,8 +153,18 @@
 
   <!-- ด้านบนซ้าย: โลโก้ สทนช. + เครื่องมือวัดระยะ + ปุ่มลงพื้นที่ + อยู่ในทุ่งไหน -->
   <div class="absolute safe-top left-3 right-[76px] md:right-auto md:w-[380px] flex flex-col gap-2 pointer-events-none z-10">
-    <img id="onwrLogo" src="assets/onwr-logo.png" alt="สำนักงานทรัพยากรน้ำแห่งชาติ (สทนช.)"
-      class="self-start w-12 h-auto mb-1 drop-shadow-[0_1px_3px_rgba(255,255,255,0.9)] select-none" draggable="false" />
+    <div class="flex items-center gap-2 mb-1 min-w-0">
+      <img id="onwrLogo" src="assets/onwr-logo.png" alt="สำนักงานทรัพยากรน้ำแห่งชาติ (สทนช.)"
+        class="flex-none w-12 h-auto drop-shadow-[0_1px_3px_rgba(255,255,255,0.9)] select-none" draggable="false" />
+      <!-- ลุ่มน้ำที่เน้นอยู่ (แตะชื่อ = ซูมไป · ✕ = เลิกเน้น) -->
+      <div id="basinChip" class="hidden pointer-events-auto min-w-0 items-center bg-white rounded-full shadow-md h-9 pl-1 pr-0.5 text-sm">
+        <button id="basinChipName" class="min-w-0 flex items-center gap-1.5 h-9 pl-2 pr-1 font-semibold text-teal-800">
+          <svg class="w-4 h-4 flex-none" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-dasharray="4 2.5"><rect x="3.5" y="3.5" width="17" height="17" rx="3"/></svg>
+          <span class="truncate"></span></button>
+        <button id="basinChipClear" aria-label="เลิกเน้นลุ่มน้ำ" class="w-8 h-8 flex-none rounded-full grid place-items-center text-gray-500 active:bg-gray-100">
+          <svg class="w-4 h-4" viewBox="0 0 24 24" fill="currentColor"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg></button>
+      </div>
+    </div>
     <div class="flex items-center gap-2">
       <button id="btnMeasure" aria-label="วัดระยะทาง" aria-pressed="false"
         class="pointer-events-auto w-12 h-12 flex-none rounded-full bg-white shadow-md grid place-items-center active:bg-gray-100">
@@ -280,21 +298,25 @@
   <div id="backdrop" class="fixed inset-0 z-20 bg-black/20 hidden md:!hidden"></div>
   <!-- หน้าจัดวางภาพแผนที่ A2/A3 -->
   <div id="designer" class="hidden fixed inset-0 z-40 flex flex-col bg-gray-600">
-    <div class="flex items-center gap-1.5 px-1.5 bg-white shadow-md flex-none" style="padding-top: env(safe-area-inset-top); min-height: calc(env(safe-area-inset-top) + 56px);">
-      <button id="dsClose" aria-label="ปิด" class="w-9 h-10 rounded-full grid place-items-center active:bg-gray-100">
+    <div class="flex items-center gap-1 px-1 bg-white shadow-md flex-none" style="padding-top: env(safe-area-inset-top); min-height: calc(env(safe-area-inset-top) + 56px);">
+      <button id="dsClose" aria-label="ปิด" class="w-8 h-10 flex-none rounded-full grid place-items-center active:bg-gray-100">
         <svg class="w-6 h-6 text-gray-700" viewBox="0 0 24 24" fill="currentColor"><path d="M19 6.4L17.6 5 12 10.6 6.4 5 5 6.4 10.6 12 5 17.6 6.4 19 12 13.4 17.6 19 19 17.6 13.4 12z"/></svg>
       </button>
-      <div class="seg"><button data-paper="A3">A3</button><button data-paper="A2">A2</button></div>
+      <div class="seg items-center">
+        <button data-paper="A3">A3</button><button data-paper="A2">A2</button>
+        <span class="w-px h-5 bg-gray-300"></span>
+        <button data-orient="portrait" aria-label="แนวตั้ง" title="แนวตั้ง" style="padding:0 5px">
+          <svg class="w-4 h-4 mx-auto" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><rect x="6" y="2.5" width="12" height="19" rx="1.5"/></svg></button>
+        <button data-orient="landscape" aria-label="แนวนอน" title="แนวนอน" style="padding:0 5px">
+          <svg class="w-4 h-4 mx-auto" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><rect x="2.5" y="6" width="19" height="12" rx="1.5"/></svg></button>
+      </div>
       <div class="seg"><button data-mode="map">แผนที่</button><button data-mode="edit">จัดวาง</button></div>
       <span class="flex-1"></span>
-      <button id="dsReset" aria-label="รีเซ็ต" class="w-9 h-10 rounded-full grid place-items-center active:bg-gray-100">
-        <svg class="w-5 h-5 text-gray-700" viewBox="0 0 24 24" fill="currentColor"><path d="M12 5V2L7 6l5 4V7c3.31 0 6 2.69 6 6s-2.69 6-6 6-6-2.69-6-6H4c0 4.42 3.58 8 8 8s8-3.58 8-8-3.58-8-8-8z"/></svg>
-      </button>
-      <button id="dsSettings" aria-label="ตั้งค่า" aria-pressed="false" class="w-9 h-9 rounded-full grid place-items-center active:bg-gray-100">
+      <button id="dsSettings" aria-label="ตั้งค่า" aria-pressed="false" class="w-9 h-9 flex-none rounded-full grid place-items-center active:bg-gray-100">
         <svg class="w-5 h-5" viewBox="0 0 24 24" fill="currentColor"><path d="M19.43 12.98c.04-.32.07-.64.07-.98s-.03-.66-.07-.98l2.11-1.65c.19-.15.24-.42.12-.64l-2-3.46c-.12-.22-.39-.3-.61-.22l-2.49 1c-.52-.4-1.08-.73-1.69-.98l-.38-2.65C14.46 2.18 14.25 2 14 2h-4c-.25 0-.46.18-.49.42l-.38 2.65c-.61.25-1.17.59-1.69.98l-2.49-1c-.23-.09-.49 0-.61.22l-2 3.46c-.13.22-.07.49.12.64l2.11 1.65c-.04.32-.07.65-.07.98s.03.66.07.98l-2.11 1.65c-.19.15-.24.42-.12.64l2 3.46c.12.22.39.3.61.22l2.49-1c.52.4 1.08.73 1.69.98l.38 2.65c.03.24.24.42.49.42h4c.25 0 .46-.18.49-.42l.38-2.65c.61-.25 1.17-.59 1.69-.98l2.49 1c.23.09.49 0 .61-.22l2-3.46c.12-.22.07-.49-.12-.64l-2.11-1.65zM12 15.5c-1.93 0-3.5-1.57-3.5-3.5s1.57-3.5 3.5-3.5 3.5 1.57 3.5 3.5-1.57 3.5-3.5 3.5z"/></svg>
       </button>
       <div class="relative">
-        <button id="dsSave" aria-haspopup="menu" class="h-10 pl-3 pr-2 rounded-full bg-blue-600 text-white text-[13px] font-semibold whitespace-nowrap active:bg-blue-700 flex items-center gap-0.5">บันทึก
+        <button id="dsSave" aria-haspopup="menu" class="h-10 pl-2.5 pr-1.5 rounded-full bg-blue-600 text-white text-[13px] font-semibold whitespace-nowrap active:bg-blue-700 flex items-center gap-0.5">บันทึก
           <svg class="w-4 h-4" viewBox="0 0 24 24" fill="currentColor"><path d="M7.4 8.6 12 13.2l4.6-4.6L18 10l-6 6-6-6z"/></svg></button>
         <div id="dsSaveMenu" role="menu" class="hidden absolute right-0 top-12 z-[55] flex gap-1.5 rounded-2xl bg-white shadow-2xl border border-gray-200 p-1.5">
           <button data-format="png" role="menuitem" aria-label="บันทึกเป็นภาพ PNG" title="PNG" class="w-12 h-12 rounded-xl bg-blue-50 text-blue-700 grid place-items-center text-[12px] font-bold active:bg-blue-100 hover:bg-blue-100">PNG</button>
@@ -345,11 +367,11 @@
   <div id="toast" class="fixed left-1/2 -translate-x-1/2 safe-bottom mb-24 z-40 bg-gray-900 text-white text-sm rounded-lg px-4 py-2.5 shadow-lg hidden max-w-[90vw] text-center"></div>
 
   <!-- เปลี่ยนเลข ?v= ทุกครั้งที่แก้ไฟล์ .js เพื่อให้มือถือโหลดไฟล์ใหม่ -->
-  <script src="app.js?v=57"></script>
-  <script src="sheet.js?v=57"></script>
-  <script src="track.js?v=57"></script>
-  <script src="measure.js?v=57"></script>
-  <script src="export-render.js?v=57"></script>
-  <script src="export.js?v=57"></script>
+  <script src="app.js?v=60"></script>
+  <script src="sheet.js?v=60"></script>
+  <script src="track.js?v=60"></script>
+  <script src="measure.js?v=60"></script>
+  <script src="export-render.js?v=60"></script>
+  <script src="export.js?v=60"></script>
 </body>
 </html>

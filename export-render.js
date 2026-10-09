@@ -6,7 +6,12 @@
  * ============================================================ */
 
 const PAPER = { A2: [420, 594], A3: [297, 420] };   // mm แนวตั้ง
-const PAGE_MM = [420, 594];                          // หน้ากระดาษในหน่วยจัดวาง (ทุกขนาดใช้สัดส่วนเดียวกัน)
+const PAGE_BASE = [420, 594];                        // หน้ากระดาษในหน่วยจัดวาง (ทุกขนาดใช้สัดส่วนเดียวกัน) แนวตั้ง
+const isLandscape = s => s.orient === 'landscape';
+const pageMm = s => isLandscape(s) ? [PAGE_BASE[1], PAGE_BASE[0]] : [PAGE_BASE[0], PAGE_BASE[1]];   // [กว้าง, สูง] หน่วยจัดวาง
+const paperMm = s => isLandscape(s) ? [PAPER[s.paper][1], PAPER[s.paper][0]] : [...PAPER[s.paper]];  // [กว้าง, สูง] มม. จริง
+/* ตำแหน่ง/ขนาดกล่องแยกตามแนวกระดาษ (แนวตั้ง = layout.boxes · แนวนอน = layout.boxesL) */
+const layoutBoxes = (layout, s) => isLandscape(s) ? (layout.boxesL = layout.boxesL || {}) : (layout.boxes = layout.boxes || {});
 const EXPORT_DPI = 150;
 const MM_PER_CSS_PX = 0.33;      // ตัวอักษรป้าย: px บนจอ → มม. บน A2 (16px ≈ 5.3 มม. ≈ 16pt)
 const STROKE_K_PER_U = 0.23;     // ความหนาเส้น/ขนาดไอคอน = ค่าบนจอ × U × ค่านี้ (A2 150dpi ≈ 1.35×)
@@ -14,10 +19,10 @@ const FONT_TH = '"Noto Sans Thai", system-ui, sans-serif';
 // ลำดับทุ่งในตาราง/เลขหน้าชื่อ (ตามเอกสารต้นแบบ) — ทุ่งที่ไม่อยู่ในรายการต่อท้าย
 const TUNG_ORDER = ['บางระกำ', 'เชียงราก', 'ฝั่งซ้ายชัยนาทป่าสัก', 'ท่าวุ้ง', 'บางกุ่ม', 'บางกุ้ง',
   'บางบาล-บ้านแพน', 'ป่าโมก', 'ผักไห่', 'เจ้าเจ็ด', 'โครงการฯโพธิ์พระยา'];
-const LEGEND_ORDER = ['visits', 'stations', 'water-other', 'streams-main', 'streams-sub', 'water-l', 'water-m', 'tung', 'provinces'];
+const LEGEND_ORDER = ['visits', 'stations', 'water-other', 'streams-main', 'streams-sub', 'water-l', 'water-m', 'tung', 'provinces', 'basins'];
 const LABEL_CLASS_NAMES = {
   'tung-label': 'ชื่อทุ่งรับน้ำ', 'water-label': 'ชื่อเขื่อน / อาคารบังคับน้ำ', 'river-label': 'ชื่อแม่น้ำ',
-  'stn-label': 'รหัสสถานี', 'visit-label': 'จุดลงพื้นที่', 'prov-label': 'ชื่อจังหวัด',
+  'stn-label': 'รหัสสถานี', 'visit-label': 'จุดลงพื้นที่', 'prov-label': 'ชื่อจังหวัด', 'basin-label': 'ชื่อลุ่มน้ำหลัก',
 };
 const BOX_NAMES = { logo: 'โลโก้', table: 'ตาราง', legend: 'สัญลักษณ์', north: 'ลูกศรทิศเหนือ', scalebar: 'มาตราส่วน' };
 // คอลัมน์ตาราง 11 ทุ่ง (w = มม. บน A2 ที่ขนาดกล่อง 1×) — "name" แสดงเสมอ
@@ -32,7 +37,7 @@ const TABLE_COLS = [
 const BOX_SCALE_MIN = 0.3, BOX_SCALE_MAX = 4;
 const PAGE_MARGIN_MM = 8;            // ขอบกระดาษสีขาว 4 ด้าน (มม. บน A2)
 const EDGE_MM = PAGE_MARGIN_MM + 4;  // ตำแหน่งเริ่มต้นของโลโก้/ตาราง/สัญลักษณ์ ห่างจากขอบกระดาษ
-const boxScale = (layout, type) => (layout.boxes[type] && layout.boxes[type].s) || 1;
+const boxScale = (boxes, type) => (boxes[type] && boxes[type].s) || 1;
 
 /* ---------- การตั้งค่า ---------- */
 const POLY_ICONS = ['area', 'lake', 'boundary'], LINE_ICONS = ['line', 'line-thick'];
@@ -44,6 +49,7 @@ function layerColorDefaults(o) {
 function defaultExportSettings() {
   return {
     paper: 'A2',
+    orient: 'portrait',
     layers: Object.fromEntries(OVERLAYS.map(o => [o.id, { on: overlayState[o.id].visible, width: 1, iconSize: 1, ...layerColorDefaults(o) }])),
     labels: Object.fromEntries(Object.entries(LABEL_STYLES).map(([k, s]) => [k, { on: true, size: 1, color: s.color }])),
     table: { on: true, cols: Object.fromEntries(TABLE_COLS.map(c => [c.key, true])), totals: true },
@@ -54,7 +60,7 @@ function defaultExportSettings() {
 function mergeSettings(stored) {
   const d = defaultExportSettings();
   if (!stored) return d;
-  const out = { ...d, paper: PAPER[stored.paper] ? stored.paper : d.paper };
+  const out = { ...d, paper: PAPER[stored.paper] ? stored.paper : d.paper, orient: stored.orient === 'landscape' ? 'landscape' : 'portrait' };
   for (const grp of ['layers', 'labels']) {
     for (const k of Object.keys(d[grp])) out[grp][k] = { ...d[grp][k], ...(stored[grp] && stored[grp][k] || {}) };
   }
@@ -151,6 +157,7 @@ function applyExportStyle(m, settings, U, refZoom, { minPx = 0 } = {}) {
       if (paint['circle-color'] != null && ls.fillColor) m.setPaintProperty(def.id, 'circle-color', ls.fillColor);
     }
   }
+  if (m.getLayer('basin-focus-line')) m.setPaintProperty('basin-focus-line', 'line-width', Math.max(minPx, numAt(BASIN_FOCUS_WIDTH, refZoom) * k));
 }
 
 /* ---------- ฟอนต์ของป้ายแต่ละชนิด (px ของ canvas) ---------- */
@@ -215,17 +222,18 @@ function scalebarSpec(m, Ub) {
 
 /* ---------- จัดหน้า: กล่อง + ป้ายชื่อ (คืนตำแหน่งเป็น px ของ canvas) ---------- */
 function buildPage(ctx, m, U, settings, layout, refZoom) {
-  const W = PAGE_MM[0] * U, H = PAGE_MM[1] * U, mm = v => v * U;
+  const [PW, PH] = pageMm(settings), lb = layoutBoxes(layout, settings);
+  const W = PW * U, H = PH * U, mm = v => v * U;
   const boxes = [];
   // ขนาดกล่อง = ขนาดพื้นฐาน × s (ลากมุมปรับในหน้าจัดวาง) · ตำแหน่งเป็นมุมบนซ้าย (มม.)
   const place = (type, w, h, defX, defY) => {
-    const p = layout.boxes[type];
+    const p = lb[type];
     const x = p && p.x != null ? mm(p.x) : mm(defX), y = p && p.y != null ? mm(p.y) : mm(defY);
-    const b = { type, s: boxScale(layout, type), x1: x, y1: y, x2: x + w, y2: y + h };
+    const b = { type, s: boxScale(lb, type), x1: x, y1: y, x2: x + w, y2: y + h };
     boxes.push(b);
     return b;
   };
-  const Ub = type => U * boxScale(layout, type);
+  const Ub = type => U * boxScale(lb, type);
   if (settings.furniture.logo && exportAssets.logo) {
     const w = 34 * Ub('logo'), h = w * exportAssets.logo.height / exportAssets.logo.width;
     place('logo', w, h, EDGE_MM, EDGE_MM);
@@ -236,21 +244,21 @@ function buildPage(ctx, m, U, settings, layout, refZoom) {
   }
   if (settings.legend.on) {
     const spec = legendSpec(settings, Ub('legend'));
-    place('legend', spec.w, spec.h, EDGE_MM, PAGE_MM[1] - EDGE_MM - spec.h / U).spec = spec;
+    place('legend', spec.w, spec.h, EDGE_MM, PH - EDGE_MM - spec.h / U).spec = spec;
   }
   if (settings.furniture.north) {
     const u = Ub('north');
-    place('north', 18 * u, 22 * u, PAGE_MM[0] - EDGE_MM - 18 * u / U, EDGE_MM);
+    place('north', 18 * u, 22 * u, PW - EDGE_MM - 18 * u / U, EDGE_MM);
   }
   if (settings.furniture.scalebar) {
     const spec = scalebarSpec(m, Ub('scalebar'));
-    place('scalebar', spec.w, spec.h, PAGE_MM[0] - EDGE_MM - spec.w / U, PAGE_MM[1] - EDGE_MM - spec.h / U).spec = spec;
+    place('scalebar', spec.w, spec.h, PW - EDGE_MM - spec.w / U, PH - EDGE_MM - spec.h / U).spec = spec;
   }
 
   // ---- ป้ายชื่อ ----
   const [[w0, s0], [e0, n0]] = m.getBounds().toArray();
   const ix = (e0 - w0) * 0.06, iy = (n0 - s0) * 0.04;
-  const inside = ll => ll.lng > w0 + ix && ll.lng < e0 - ix && ll.lat > s0 + iy && ll.lat < n0 - iy;
+  const inside = ll => ll.lng > w0 + ix && ll.lng < e0 - ix && ll.lat > s0 + iy && ll.lat < n0 - iy && inFocus(ll);
   const k = U * STROKE_K_PER_U;
   let iconR = 0;
   const items = [], metas = [];
@@ -271,6 +279,7 @@ function buildPage(ctx, m, U, settings, layout, refZoom) {
         if (p.label_lng == null) continue;
         const key = normKey(o, p), pin = layout.labels[key];
         if (pin && pin.hidden) continue;
+        if (!inFocus([p.label_lng, p.label_lat])) continue;   // นอกลุ่มน้ำที่เน้น (พื้นสีขาว)
         const pt = m.project([p.label_lng, p.label_lat]);
         if (pt.x < -W * 0.1 || pt.y < -H * 0.1 || pt.x > W * 1.1 || pt.y > H * 1.1) continue;
         let text = displayName(o, p) || '';
@@ -286,7 +295,7 @@ function buildPage(ctx, m, U, settings, layout, refZoom) {
       const key = `${o.id}:${name}`, pin = layout.labels[key];
       if (pin && pin.hidden) continue;
       let pt, rot, alts = [], lngLat;
-      if (pin && pin.lng != null) { lngLat = [pin.lng, pin.lat]; pt = m.project(lngLat); rot = pin.rot || 0; }
+      if (pin && pin.lng != null) { if (!inFocus([pin.lng, pin.lat])) continue; lngLat = [pin.lng, pin.lat]; pt = m.project(lngLat); rot = pin.rot || 0; }
       else {
         const r = pickRiverLabel(group, refZoom, inside);
         if (!r.chosen) continue;
@@ -500,9 +509,9 @@ function loadJsPdf() {
 
 /* คืน File (PNG หรือ PDF) · center/zoom/pageW = ของแผนที่ตัวอย่าง → ภาพจริงฉายจุดเหมือนตัวอย่างทุกประการ */
 async function renderFinal({ settings, layout, center, zoom, pageW, prog, dpi = EXPORT_DPI, format = 'png' }) {
-  const [mmW, mmH] = PAPER[settings.paper];
+  const [mmW, mmH] = paperMm(settings);
   const W = mmToPx(mmW, dpi), H = mmToPx(mmH, dpi);
-  const U = W / PAGE_MM[0];
+  const U = W / pageMm(settings)[0];
   let em = null, box = null;
   try {
     if (prog) prog.set(`โหลดแผนที่ (${W}×${H} px)…`);
@@ -521,6 +530,7 @@ async function renderFinal({ settings, layout, center, zoom, pageW, prog, dpi = 
     });
     addMapImages(em, pointIconColors(settings));
     addOverlayLayers(em);
+    addBasinFocusLayers(em);
     applyExportStyle(em, settings, U, zoom);
     await waitIdle(em, prog);
 
@@ -536,11 +546,11 @@ async function renderFinal({ settings, layout, center, zoom, pageW, prog, dpi = 
 
     if (prog) prog.set('บันทึกไฟล์…');
     const d = new Date(), pad = n => String(n).padStart(2, '0');
-    const base = `map-${settings.paper}-${d.getFullYear()}${pad(d.getMonth() + 1)}${pad(d.getDate())}-${pad(d.getHours())}${pad(d.getMinutes())}`;
+    const base = `map-${settings.paper}${isLandscape(settings) ? '-landscape' : ''}-${d.getFullYear()}${pad(d.getMonth() + 1)}${pad(d.getDate())}-${pad(d.getHours())}${pad(d.getMinutes())}`;
     if (format === 'pdf') {
       // หน้า PDF = ขนาดกระดาษจริง (พิมพ์แล้วได้สเกลถูก) · ภาพใส่เป็น JPEG ให้ไฟล์ไม่ใหญ่เกิน
       const { jsPDF } = await loadJsPdf();
-      const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: [mmW, mmH], compress: true });
+      const doc = new jsPDF({ orientation: mmW > mmH ? 'landscape' : 'portrait', unit: 'mm', format: [mmW, mmH], compress: true });
       doc.addImage(canvas.toDataURL('image/jpeg', 0.92), 'JPEG', 0, 0, mmW, mmH, undefined, 'FAST');
       return new File([doc.output('blob')], base + '.pdf', { type: 'application/pdf' });
     }

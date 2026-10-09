@@ -132,6 +132,22 @@ const OVERLAYS = [
     opacityProps: [['line', 'line-opacity', 1]],
   },
   {
+    // ขอบเขตลุ่มน้ำหลัก 22 ลุ่ม (สทนช.): เส้นประสีเขียวอมฟ้า ไม่มีพื้น + ชื่อลุ่มน้ำ
+    id: 'basins', name: 'ลุ่มน้ำหลัก', url: 'data/basins.geojson', visible: true, opacity: 1,
+    icon: 'boundary', swatch: 'transparent', outline: '#0f766e', titleField: 'name',
+    labels: true, labelClass: 'basin-label', labelMinZoom: 6, noClick: true,
+    legend: true, legendTitle: 'เลือกลุ่มน้ำ', onPick: f => setFocusBasin(f.properties.code),
+    onLabelClick: f => setFocusBasin(f.properties.code),
+    countText: data => `${data.features.filter(f => f.geometry.type === 'Point').length} ลุ่มน้ำ`,
+    layers: (src, op) => [
+      { id: `${src}-line`, type: 'line', source: src, filter: ['!=', '$type', 'Point'],
+        layout: { 'line-join': 'round', 'line-cap': 'round' },
+        paint: { 'line-color': '#0f766e', 'line-opacity': op, 'line-dasharray': [3, 1.6],
+                 'line-width': ['interpolate', ['linear'], ['zoom'], 5, 1.6, 8, 2.6, 11, 3.6, 14, 4.6] } },
+    ],
+    opacityProps: [['line', 'line-opacity', 1]],
+  },
+  {
     id: 'streams-sub', name: 'ลำน้ำสาขา', url: 'data/streams-sub.geojson', visible: true, opacity: 1,
     icon: 'line', swatch: '#0ea5e9', titleField: 'str_name',
     layers: (src, op) => [
@@ -362,6 +378,7 @@ map.on('load', async () => {
     if (o.labels) createLabels(o);
   }
   onMapReady.forEach(fn => fn());
+  addBasinFocusLayers(map);
   map.addLayer({ id: 'selected-fill', type: 'fill', source: 'selected', filter: ['==', '$type', 'Polygon'],
     paint: { 'fill-color': '#facc15', 'fill-opacity': 0.25 } });
   map.addLayer({ id: 'selected-line', type: 'line', source: 'selected', layout: { 'line-cap': 'round', 'line-join': 'round' },
@@ -372,6 +389,8 @@ map.on('load', async () => {
   renderLayerPanel();
   updateLabels();
   if (lastFix) updateZone(lastFix);
+  const savedBasin = store.get('focus:basin', null);
+  if (savedBasin) setFocusBasin(savedBasin, { fit: false });
 });
 
 /* ป้ายชื่อแบบ HTML (รองรับสระ/วรรณยุกต์ภาษาไทยถูกต้อง) */
@@ -387,6 +406,7 @@ function createLabels(o) {
       el.firstChild.textContent = f.properties[o.titleField];
       if (o.labelExtra) el.children[1].textContent = o.labelExtra(f.properties);
       st.labelEls[f.properties[o.titleField]] = el;
+      if (o.onLabelClick) el.addEventListener('click', e => { e.stopPropagation(); o.onLabelClick(f); });
       const m = new maplibregl.Marker({ element: el, anchor: 'center' }).setLngLat([f.properties.label_lng, f.properties.label_lat]);
       m.movable = !!o.labelAnchor;    // ป้ายของจุด: ย้ายไปรอบจุดได้ (ขวา → ซ้าย → บน → ล่าง)
       return m;
@@ -402,11 +422,11 @@ function updateLabels() {
   const b = map.getBounds();
   const [[w, s], [e, n]] = b.toArray();
   const ix = (e - w) * 0.12, iy = (n - s) * 0.08;   // ขอบด้านใน: ให้ชื่ออยู่ในจอทั้งคำ
-  const insideInner = ll => ll.lng > w + ix && ll.lng < e - ix && ll.lat > s + iy && ll.lat < n - iy;
+  const insideInner = ll => ll.lng > w + ix && ll.lng < e - ix && ll.lat > s + iy && ll.lat < n - iy && inFocus(ll);
   for (const o of OVERLAYS) {
     const st = overlayState[o.id];
     const on = z >= (o.labelMinZoom ?? 7) && st.visible;   // ค่าเริ่มต้น (ทุ่งรับน้ำ)
-    st.labels.forEach(m => showMarker(m, on));
+    st.labels.forEach(m => showMarker(m, on && inFocus(m.getLngLat())));
     // ชื่อตามแนวแม่น้ำ: 1 ชื่อต่อแม่น้ำ วางกลางช่วงที่มองเห็นในจอ
     // เลือกจากจุดที่มุมเอียงคำนวณไว้สำหรับระดับซูมนี้ก่อน (ข้อความจะขนานกับลำน้ำพอดี)
     for (const group of Object.values(st.lineGroups || {})) {
@@ -439,7 +459,7 @@ function pickRiverLabel(group, z, inside) {
  *  ไอคอนทุกจุดยังแสดงเสมอ
  * ============================================================ */
 const LABEL_PRIORITY = {   // มาก = สำคัญกว่า (ได้วางก่อน)
-  visits: 100, stations: 90, 'water-other': 80, 'water-l': 70, tung: 60, 'streams-main': 50, provinces: 40,
+  visits: 100, stations: 90, 'water-other': 80, 'water-l': 70, tung: 60, 'streams-main': 50, provinces: 40, basins: 35,
 };
 const POINT_ICON_LAYERS = ['visits', 'stations', 'water-other'];
 
@@ -538,7 +558,7 @@ function resolveLabels() {
 
   // ปุ่ม/โลโก้/แผงบนจอ: ไม่วางป้ายไว้ใต้ปุ่ม
   const mb = map.getContainer().getBoundingClientRect();
-  const ui = [...document.querySelectorAll('#btnMeasure, #btnVisits, #btnExport, #onwrLogo, #btnLayers, #btnCompass, #zoomBox, #btnRecord, #btnLocate, #recBar, #measurePanel, #zoneChip')]
+  const ui = [...document.querySelectorAll('#btnMeasure, #btnVisits, #btnExport, #onwrLogo, #basinChip, #btnLayers, #btnCompass, #zoomBox, #btnRecord, #btnLocate, #recBar, #measurePanel, #zoneChip')]
     .filter(el => el.offsetParent && getComputedStyle(el).visibility !== 'hidden')
     .map(el => { const b = el.getBoundingClientRect(); return { x1: b.left - mb.left - 4, y1: b.top - mb.top - 4, x2: b.right - mb.left + 4, y2: b.bottom - mb.top + 4 }; });
 
@@ -569,6 +589,7 @@ const LABEL_STYLES = {
   'stn-label':   { size: 13, weight: 700, color: '#9a3412', halo: 3, family: 'system-ui, sans-serif' },
   'visit-label': { size: 13, weight: 700, color: '#991b1b', halo: 2 },
   'prov-label':  { size: 13, weight: 600, color: '#111827', halo: 1.5, opacity: 0.85 },
+  'basin-label': { size: 14, weight: 700, color: '#0f766e', halo: 2 },
 };
 
 /* ส่งไฟล์ให้ผู้ใช้: มือถือเปิดหน้าแชร์ (บันทึกลงไฟล์/รูป, ส่ง LINE) — คอมดาวน์โหลด */
@@ -635,15 +656,16 @@ function renderLayerPanel() {
     const failed = !map.getSource(o.id);
     // รายชื่อ (พับเก็บได้ · ค่าเริ่มต้นพับไว้ · จำสถานะไว้ในเครื่อง)
     const open = store.get(`legend:${o.id}`, false);
+    const items = st.data ? st.data.features.filter(f => f.properties[o.titleField]) : [];
     const legend = o.legend && st.data ? `
       <div class="mt-3 ${st.visible ? '' : 'hidden'}" data-legend="${o.id}">
         <button data-legend-toggle="${o.id}" aria-expanded="${open}" class="flex items-center gap-1 text-[13px] text-gray-600 h-8 -ml-1 px-1 rounded-lg active:bg-gray-100">
-          ${o.legendTitle || `รายชื่อ${o.name}`} (${st.data.features.length})
+          ${o.legendTitle || `รายชื่อ${o.name}`} (${items.length})
           <svg class="w-4 h-4 transition-transform ${open ? 'rotate-180' : ''}" viewBox="0 0 24 24" fill="currentColor"><path d="M7.4 8.6 12 13.2l4.6-4.6L18 10l-6 6-6-6z"/></svg>
         </button>
         <div class="flex flex-wrap gap-1.5 mt-1 ${open ? '' : 'hidden'}" data-legend-list="${o.id}">
-          ${st.data.features.map(f => `
-            <button data-zoomfeat="${o.id}:${f.id}" class="flex items-center gap-1.5 rounded-full bg-gray-100 active:bg-gray-200 pl-2 pr-2.5 h-8 text-[13px]">
+          ${items.map(f => `
+            <button data-zoomfeat="${o.id}:${f.id}" class="flex items-center gap-1.5 rounded-full ${o.onPick && focusBasin && focusBasin.code === f.properties.code ? 'bg-teal-100 text-teal-900 ring-1 ring-teal-600' : 'bg-gray-100'} active:bg-gray-200 pl-2 pr-2.5 h-8 text-[13px]">
               ${layerIcon(o, 14)}${escapeHtml(displayName(o, f.properties))}
             </button>`).join('')}
         </div>
@@ -677,7 +699,7 @@ $('basemapList').addEventListener('click', e => {
   activeBase = btn.dataset.base;
   store.set('basemap', activeBase);
   BASEMAPS.forEach(b => map.setLayoutProperty(`base-${b.id}`, 'visibility', b.id === activeBase ? 'visible' : 'none'));
-  document.querySelectorAll('.tung-label, .water-label, .stn-label, .river-label, .prov-label, .visit-label').forEach(el => {
+  document.querySelectorAll('.tung-label, .water-label, .stn-label, .river-label, .prov-label, .visit-label, .basin-label').forEach(el => {
     el.style.color = activeBase === 'satellite' ? '#fff' : '';
     el.style.textShadow = activeBase === 'satellite' ? '0 0 3px #000, 0 0 3px #000' : '';
   });
@@ -723,6 +745,7 @@ $('overlayList').addEventListener('click', e => {
     const [id, fid] = zf.dataset.zoomfeat.split(':');
     const o = OVERLAYS.find(x => x.id === id);
     const f = overlayState[id].data.features[+fid];
+    if (o.onPick) { o.onPick(f); return; }
     fitTo(geomBounds(f));
     showInfo(o, f);
   }
@@ -754,6 +777,86 @@ function fitTo(bounds) {
   const wide = matchMedia('(min-width: 768px)').matches;
   map.fitBounds(bounds, { padding: wide ? { top: 60, bottom: 60, left: 60, right: 80 } : { top: 140, bottom: 80, left: 30, right: 80 }, maxZoom: 14 });
 }
+
+/* ============================================================
+ *  เน้นลุ่มน้ำ: ซูมเข้า + พื้นที่นอกลุ่มน้ำเป็นสีขาวทึบ
+ *  สถานะเดียวใช้ร่วมกันทั้งแผนที่หลัก หน้าจัดวาง และภาพ export
+ * ============================================================ */
+const BASIN_FOCUS_WIDTH = ['interpolate', ['linear'], ['zoom'], 5, 2.5, 8, 3.5, 11, 5, 14, 6];
+let focusBasin = null;          // { code, name, feature, bbox, bounds } | null
+const focusListeners = [];      // fn(focusBasin) — เช่น หน้าจัดวาง
+let basinAreasPromise = null;
+function loadBasinAreas() {     // ขอบเขตแบบพื้นที่ โหลดเมื่อเลือกลุ่มน้ำครั้งแรก
+  if (!basinAreasPromise) basinAreasPromise = fetch('data/basins-area.geojson', { cache: 'no-cache' })
+    .then(r => { if (!r.ok) throw new Error(r.status); return r.json(); })
+    .catch(err => { basinAreasPromise = null; throw err; });
+  return basinAreasPromise;
+}
+const basinPolys = f => f.geometry.type === 'Polygon' ? [f.geometry.coordinates] : f.geometry.coordinates;
+const ringArea = r => { let a = 0; for (let i = 0; i < r.length - 1; i++) a += r[i][0] * r[i + 1][1] - r[i + 1][0] * r[i][1]; return a / 2; };
+const orientRing = (r, ccw) => (ringArea(r) > 0) === ccw ? r : [...r].reverse();
+/* สี่เหลี่ยมคลุมโลก เจาะรูเป็นรูปลุ่มน้ำ (วงนอก CCW · รู CW) */
+function basinMaskFC(f) {
+  if (!f) return emptyFC();
+  const world = [[-180, -85], [180, -85], [180, 85], [-180, 85], [-180, -85]];
+  const holes = basinPolys(f).map(p => orientRing(p[0], false));
+  return { type: 'FeatureCollection', features: [{ type: 'Feature', properties: {}, geometry: { type: 'Polygon', coordinates: [orientRing(world, true), ...holes] } }] };
+}
+function addBasinFocusLayers(m) {
+  if (m.getSource('basin-mask')) return;
+  m.addSource('basin-mask', { type: 'geojson', data: emptyFC() });
+  m.addSource('basin-focus', { type: 'geojson', data: emptyFC() });
+  m.addLayer({ id: 'basin-mask-fill', type: 'fill', source: 'basin-mask', paint: { 'fill-color': '#ffffff', 'fill-opacity': 1 } });
+  m.addLayer({ id: 'basin-focus-line', type: 'line', source: 'basin-focus', layout: { 'line-join': 'round', 'line-cap': 'round' },
+    paint: { 'line-color': '#0f766e', 'line-width': BASIN_FOCUS_WIDTH } });
+  setBasinFocusData(m);
+}
+function setBasinFocusData(m) {
+  if (!m || !m.getSource('basin-mask')) return;
+  m.getSource('basin-mask').setData(basinMaskFC(focusBasin && focusBasin.feature));
+  m.getSource('basin-focus').setData(focusBasin ? { type: 'FeatureCollection', features: [focusBasin.feature] } : emptyFC());
+}
+function pointInRing(x, y, r) {
+  let c = false;
+  for (let i = 0, j = r.length - 1; i < r.length; j = i++) {
+    if ((r[i][1] > y) !== (r[j][1] > y) && x < (r[j][0] - r[i][0]) * (y - r[i][1]) / (r[j][1] - r[i][1]) + r[i][0]) c = !c;
+  }
+  return c;
+}
+/* จุด (LngLat หรือ [lng, lat]) อยู่ในลุ่มน้ำที่เน้นหรือไม่ — ไม่ได้เน้น = true */
+function inFocus(ll) {
+  if (!focusBasin) return true;
+  const x = Array.isArray(ll) ? ll[0] : ll.lng, y = Array.isArray(ll) ? ll[1] : ll.lat;
+  const [w, s, e, n] = focusBasin.bbox;
+  if (x < w || x > e || y < s || y > n) return false;
+  return basinPolys(focusBasin.feature).some(p => pointInRing(x, y, p[0]) && !p.slice(1).some(h => pointInRing(x, y, h)));
+}
+async function setFocusBasin(code, { fit = true } = {}) {
+  if (!code) focusBasin = null;
+  else {
+    let data;
+    try { data = await loadBasinAreas(); }
+    catch (err) { console.error('basins-area', err); toast('โหลดขอบเขตลุ่มน้ำไม่สำเร็จ'); return; }
+    const f = data.features.find(x => x.properties.code === code);
+    if (!f) { store.set('focus:basin', null); return; }
+    const [[w, s], [e, n]] = geomBounds(f);
+    focusBasin = { code, name: f.properties.name, feature: f, bbox: [w, s, e, n], bounds: [[w, s], [e, n]] };
+  }
+  store.set('focus:basin', focusBasin ? focusBasin.code : null);
+  setBasinFocusData(map);
+  renderBasinChip();
+  if (fit && focusBasin) fitTo(focusBasin.bounds);
+  updateLabels();
+  if (map.getSource('basins')) renderLayerPanel();
+  focusListeners.forEach(fn => fn(focusBasin));
+}
+function renderBasinChip() {
+  $('basinChip').classList.toggle('hidden', !focusBasin);
+  $('basinChip').classList.toggle('flex', !!focusBasin);
+  $('basinChipName').textContent = focusBasin ? focusBasin.name : '';
+}
+$('basinChipName').onclick = () => { if (focusBasin) fitTo(focusBasin.bounds); };
+$('basinChipClear').onclick = () => setFocusBasin(null);
 
 /* ============================================================
  *  แผง (sheet) เปิด/ปิด + ลากลงเพื่อปิด
