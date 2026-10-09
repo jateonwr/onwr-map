@@ -909,10 +909,10 @@ function renderFocusMenu() {
         <select id="focusKind" aria-label="ชนิดพื้นที่" class="flex-1 min-w-0 h-10 rounded-xl border border-gray-300 bg-white px-2 text-sm font-medium">
           ${Object.entries(FOCUS_KINDS).map(([k, v]) => `<option value="${k}" ${k === focusMenuKind ? 'selected' : ''}>${v.title} (${focusChoices(k).length})</option>`).join('')}
         </select>
-        <div class="flex rounded-full bg-gray-100 p-0.5 flex-none" title="พื้นที่รอบนอก">${seg('1', 'ขาวจาง')}${seg('0', 'ขาวทึบ')}</div></div>
+        <div class="flex rounded-full bg-gray-100 p-0.5 flex-none" title="พื้นที่รอบนอก">${seg('1', 'จาง')}${seg('0', 'ทึบ')}</div></div>
       <input id="focusSearch" type="search" placeholder="ค้นหา${FOCUS_KINDS[focusMenuKind].title}" class="h-10 rounded-xl border border-gray-300 px-3 text-sm">
     </div>
-    <div class="flex-1 min-h-0 overflow-y-auto p-1.5">${item('', 'แสดงทั้งหมด')}${list.map(c => item(c.key, c.name)).join('')}</div>`;
+    <div class="overflow-y-auto p-1.5" style="max-height:${5 * 40 + 12}px">${item('', 'แสดงทั้งหมด')}${list.map(c => item(c.key, c.name)).join('')}</div>`;
 }
 /* เปิดใต้ปุ่ม anchor (ชิดซ้าย/ขวาตามตำแหน่งปุ่ม) · เรียกซ้ำ = ปิด · toggleFocusMenu(false) = ปิด */
 function toggleFocusMenu(anchor, onPick) {
@@ -924,8 +924,7 @@ function toggleFocusMenu(anchor, onPick) {
     renderFocusMenu();
     const r = anchor.getBoundingClientRect(), top = Math.round(r.bottom + 8);
     m.style.top = top + 'px';
-    m.style.maxHeight = Math.max(240, Math.min(560, innerHeight - top - 12)) + 'px';
-    const mw = Math.min(340, innerWidth - 16);   // ชิดขอบปุ่มด้านที่กว้างพอ แต่ไม่ให้ล้นจอ
+    const mw = Math.min(272, innerWidth - 16);   // ชิดขอบปุ่มด้านที่กว้างพอ แต่ไม่ให้ล้นจอ
     const left = r.left + r.width / 2 < innerWidth / 2 ? r.left : r.right - mw;
     m.style.left = Math.round(Math.min(Math.max(8, left), innerWidth - mw - 8)) + 'px'; m.style.right = '';
   }
