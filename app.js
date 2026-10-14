@@ -1086,12 +1086,11 @@ for (const id of ['layerSheet', 'infoSheet']) {
   let y0 = null, dy = 0, h0 = 0, up = false;
   el.addEventListener('touchstart', e => {
     if (matchMedia('(min-width: 768px)').matches) return;
+    // แตะในส่วนที่เลื่อนได้ = เลื่อนเนื้อหาอย่างเดียว (ไม่ปิด/ไม่ย่อแผง) · ลากแผงได้จากแถบจับ/หัวแผง หรือเนื้อหาที่สั้นจนไม่ต้องเลื่อน
     const scroller = e.target.closest('.overflow-y-auto');
-    const canScroll = scroller && scroller.scrollHeight > scroller.clientHeight + 1;
-    if (scroller && scroller.scrollTop > 0) return;
+    if (scroller && scroller.scrollHeight > scroller.clientHeight + 1) return;
     y0 = e.touches[0].clientY; dy = 0; h0 = el.offsetHeight;
-    up = expandable && !el.dataset.expanded && !canScroll;   // ขยายได้: เริ่มลากนอกส่วนเลื่อน หรือเนื้อหาไม่ต้องเลื่อน
-    if (expandable && !el.dataset.expanded && !scroller) up = true;
+    up = expandable && !el.dataset.expanded;
     el.style.transition = 'none';
   }, { passive: true });
   el.addEventListener('touchmove', e => {
