@@ -556,6 +556,10 @@ async function renderFinal({ settings, layout, center, zoom, pageW, prog, dpi = 
       em.once('load', () => { clearTimeout(t); resolve(); });
     });
     addMapImages(em, pointIconColors(settings));
+    // เส้นขอบเขตละเอียดของพื้นที่ภาพ (ภาพจริงซูมลึกกว่าตัวอย่าง)
+    if (em.getZoom() >= DETAIL_Z - 0.3) {
+      for (const set of detailSetsInUse(o => settings.layers[o.id].on)) await ensureDetailTiles(set, em.getBounds().toArray());
+    }
     addOverlayLayers(em);
     addFocusLayers(em);
     applyExportStyle(em, settings, U, zoom);

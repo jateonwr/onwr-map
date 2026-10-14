@@ -57,6 +57,17 @@ const CIRCLE_STROKE_BY_ZOOM = ['interpolate', ['linear'], ['zoom'], 5, 1, 8, 1.5
 const TUNG_FILL = '#c7bca8';
 const TUNG_LINE = '#1e3a8a';   // ขอบทุ่งรับน้ำ: น้ำเงินเข้ม
 
+/* เส้นขอบเขตละเอียด: ซูม < DETAIL_Z ใช้ไฟล์หยาบ (เบา) · ซูม ≥ DETAIL_Z ใช้เส้นละเอียด (simplify 25 ม.)
+   ที่โหลดเฉพาะช่องตาราง 0.25° ในจอ (data/detail/<set>/<ix>_<iy>.json) */
+const DETAIL_Z = 10, DETAIL_STEP = 0.25, DETAIL_MAX_TILES = 160;
+const withDetail = (set, filter, base) => (src, op) => {
+  const defs = base(src, op);
+  return [
+    ...defs.map(l => ({ ...l, maxzoom: DETAIL_Z })),
+    ...defs.map(l => { const d = { ...l, id: `${l.id}-d`, source: `detail-${set}`, minzoom: DETAIL_Z }; if (filter) d.filter = filter; else delete d.filter; return d; }),
+  ];
+};
+
 const OVERLAYS = [
   {
     id: 'tung', name: 'ทุ่งรับน้ำ', url: 'data/tung.geojson', visible: true, opacity: 0.75,
@@ -139,22 +150,24 @@ const OVERLAYS = [
     id: 'tambons', name: 'ขอบเขตตำบล', url: 'data/tambons.geojson', visible: false, opacity: 1, lazy: true,
     icon: 'boundary', swatch: 'transparent', outline: '#a3a3a3', titleField: 'name', noClick: true,
     countText: () => '7,425 ตำบล',
-    layers: (src, op) => [
+    detailSet: 'admin', extraSources: { 'detail-admin': () => detailFC('admin') },
+    layers: withDetail('admin', null, (src, op) => [
       { id: `${src}-line`, type: 'line', source: src, layout: { 'line-join': 'round', 'line-cap': 'round' },
         paint: { 'line-color': '#a3a3a3', 'line-opacity': op,
                  'line-width': ['interpolate', ['linear'], ['zoom'], 7, 0.4, 10, 0.9, 13, 1.6] } },
-    ],
+    ]),
     opacityProps: [['line', 'line-opacity', 1]],
   },
   {
     id: 'amphoes', name: 'ขอบเขตอำเภอ', url: 'data/amphoes.geojson', visible: false, opacity: 1, lazy: true,
     icon: 'boundary', swatch: 'transparent', outline: '#525252', titleField: 'name', noClick: true,
     countText: () => '928 อำเภอ',
-    layers: (src, op) => [
+    detailSet: 'admin', extraSources: { 'detail-admin': () => detailFC('admin') },
+    layers: withDetail('admin', ['<=', ['get', 'lv'], 2], (src, op) => [
       { id: `${src}-line`, type: 'line', source: src, layout: { 'line-join': 'round', 'line-cap': 'round' },
         paint: { 'line-color': '#525252', 'line-opacity': op,
                  'line-width': ['interpolate', ['linear'], ['zoom'], 5, 0.6, 8, 1.2, 11, 2, 14, 2.8] } },
-    ],
+    ]),
     opacityProps: [['line', 'line-opacity', 1]],
   },
   {
@@ -164,12 +177,13 @@ const OVERLAYS = [
     labels: true, labelClass: 'prov-label', labelMinZoom: 7, noClick: true, lineStyle: 'solid',
     legend: true, legendTitle: 'เลือกจังหวัด', focusKind: 'prov',
     countText: data => `${data.features.filter(f => f.geometry.type === 'Point').length} จังหวัด`,
-    layers: (src, op) => [
+    detailSet: 'admin', extraSources: { 'detail-admin': () => detailFC('admin') },
+    layers: withDetail('admin', ['==', ['get', 'lv'], 1], (src, op) => [
       { id: `${src}-line`, type: 'line', source: src, filter: ['!=', '$type', 'Point'],
         layout: { 'line-join': 'round', 'line-cap': 'round' },
         paint: { 'line-color': '#000000', 'line-opacity': op,
                  'line-width': ['interpolate', ['linear'], ['zoom'], 5, 1.5, 8, 2.5, 11, 3.5, 14, 4.5] } },
-    ],
+    ]),
     opacityProps: [['line', 'line-opacity', 1]],
   },
   {
@@ -179,12 +193,13 @@ const OVERLAYS = [
     labels: true, labelClass: 'basin-label', labelMinZoom: 6, noClick: true, lineStyle: 'dash', dash: true,
     legend: true, legendTitle: 'เลือกลุ่มน้ำ', focusKind: 'basin',
     countText: data => `${data.features.filter(f => f.geometry.type === 'Point').length} ลุ่มน้ำ`,
-    layers: (src, op) => [
+    detailSet: 'basins', extraSources: { 'detail-basins': () => detailFC('basins') },
+    layers: withDetail('basins', null, (src, op) => [
       { id: `${src}-line`, type: 'line', source: src, filter: ['!=', '$type', 'Point'],
         layout: { 'line-join': 'round', 'line-cap': 'round' },
         paint: { 'line-color': '#0f766e', 'line-opacity': op, 'line-dasharray': [3, 1.6],
                  'line-width': ['interpolate', ['linear'], ['zoom'], 5, 1.6, 8, 2.6, 11, 3.6, 14, 4.6] } },
-    ],
+    ]),
     opacityProps: [['line', 'line-opacity', 1]],
   },
   {
@@ -268,6 +283,7 @@ const OVERLAYS = [
     // อำเภอที่มีจุดลงพื้นที่: ขอบสีเหลืองเข้ม ไม่มีพื้น (คำนวณจากตำแหน่งจุด → updateVisitAmphoes)
     extraSources: { 'visit-amphoes': () => visitAmphoeFC },
     layers: (src, op) => [
+      { id: 'visit-amphoes-fill', type: 'fill', source: 'visit-amphoes', paint: { 'fill-color': '#ca8a04', 'fill-opacity': 0.3 } },
       { id: 'visit-amphoes-line', type: 'line', source: 'visit-amphoes', layout: { 'line-join': 'round', 'line-cap': 'round' },
         paint: { 'line-color': '#ca8a04', 'line-width': ['interpolate', ['linear'], ['zoom'], 5, 2, 8, 3, 11, 4.5, 14, 6] } },
       { id: `${src}-icon`, type: 'symbol', source: src,
@@ -405,6 +421,40 @@ function addOverlayLayers(m, { onlyVisible = false, onlyIds = null } = {}) {
   }
 }
 
+/* ---------- เส้นขอบเขตละเอียด (ช่องตาราง) ---------- */
+const detailState = { admin: { tiles: new Map(), fc: emptyFC() }, basins: { tiles: new Map(), fc: emptyFC() } };
+const detailFC = set => detailState[set].fc;
+/* โหลดช่องที่ครอบ bounds [[w,s],[e,n]] ที่ยังไม่มี → อัปเดต fc (เก็บไม่เกิน DETAIL_MAX_TILES ช่อง ล่าสุดก่อน) */
+async function ensureDetailTiles(set, bounds) {
+  const st = detailState[set], [[w, s], [e, n]] = bounds, need = [];
+  for (let ix = Math.floor(w / DETAIL_STEP); ix <= Math.floor(e / DETAIL_STEP); ix++)
+    for (let iy = Math.floor(s / DETAIL_STEP); iy <= Math.floor(n / DETAIL_STEP); iy++) need.push(`${ix}_${iy}`);
+  if (need.length > 120) return st.fc;   // จอกว้างเกินไป (ไม่ควรเกิดที่ซูม ≥ 10)
+  const missing = need.filter(k => !st.tiles.has(k));
+  await Promise.all(missing.map(k => {
+    const p = fetch(`data/detail/${set}/${k}.json`).then(r => r.ok ? r.json() : emptyFC()).catch(() => { st.tiles.delete(k); return emptyFC(); });
+    st.tiles.set(k, p);
+    return p;
+  }));
+  for (const k of need) { const v = st.tiles.get(k); st.tiles.delete(k); st.tiles.set(k, v); }   // ใช้ล่าสุด = ท้ายสุด
+  while (st.tiles.size > DETAIL_MAX_TILES) st.tiles.delete(st.tiles.keys().next().value);
+  const fcs = await Promise.all([...st.tiles.values()]);
+  st.fc = { type: 'FeatureCollection', features: fcs.flatMap(fc => fc.features) };
+  return st.fc;
+}
+const detailSetsInUse = isOn => [...new Set(OVERLAYS.filter(o => o.detailSet && isOn(o)).map(o => o.detailSet))];
+/* แผนที่ใดก็ได้: ซูมถึงระดับละเอียด → โหลดช่องในจอแล้วใส่ใน source detail-<set> */
+async function updateDetailFor(m, isOn) {
+  if (!m || m.getZoom() < DETAIL_Z - 0.3) return;
+  const b = m.getBounds().toArray();
+  for (const set of detailSetsInUse(isOn)) {
+    const fc = await ensureDetailTiles(set, b);
+    m.getSource(`detail-${set}`)?.setData(fc);
+  }
+}
+const refreshDetail = () => updateDetailFor(map, o => overlayState[o.id].visible);
+map.on('moveend', refreshDetail);
+
 /* ชั้นข้อมูลแบบ lazy: โหลดไฟล์เมื่อเปิดใช้ครั้งแรก → Promise<data> */
 function ensureOverlayData(id) {
   const o = OVERLAYS.find(x => x.id === id), st = overlayState[id];
@@ -493,6 +543,7 @@ map.on('load', async () => {
   renderLayerPanel();
   updateLabels();
   updateVisitAmphoes();
+  refreshDetail();
   if (lastFix) updateZone(lastFix);
   const oldBasin = store.get('focus:basin', null);   // ค่าที่จำไว้จากรุ่นก่อน (เน้นได้เฉพาะลุ่มน้ำ)
   const savedFocus = store.get('focus:area', oldBasin ? `basin:${oldBasin}` : null);
@@ -820,6 +871,7 @@ $('overlayList').addEventListener('change', e => {
   store.set(`vis:${id}`, st.visible);
   o.layers(id, st.opacity).forEach(l => map.setLayoutProperty(l.id, 'visibility', st.visible ? 'visible' : 'none'));
   if (o.lazy && st.visible) ensureOverlayData(id).catch(() => {});
+  if (st.visible) refreshDetail();
   document.querySelector(`[data-opwrap="${id}"]`)?.classList.toggle('hidden', !st.visible);
   document.querySelector(`[data-legend="${id}"]`)?.classList.toggle('hidden', !st.visible);
   updateLabels();
@@ -832,7 +884,9 @@ $('overlayList').addEventListener('input', e => {
   const o = OVERLAYS.find(x => x.id === id), st = overlayState[id];
   st.opacity = +e.target.value;
   store.set(`op:${id}`, st.opacity);
-  o.opacityProps.forEach(([suffix, prop, k]) => map.setPaintProperty(`${id}-${suffix}`, prop, st.opacity * k));
+  o.opacityProps.forEach(([suffix, prop, k]) => {
+    for (const lid of [`${id}-${suffix}`, `${id}-${suffix}-d`]) if (map.getLayer(lid)) map.setPaintProperty(lid, prop, st.opacity * k);
+  });
 });
 
 $('overlayList').addEventListener('click', e => {
@@ -866,6 +920,7 @@ function setOverlayVisible(id, on) {
   store.set(`vis:${id}`, on);
   o.layers(id, st.opacity).forEach(l => map.setLayoutProperty(l.id, 'visibility', on ? 'visible' : 'none'));
   if (o.lazy && on) ensureOverlayData(id).catch(() => {});
+  if (on) refreshDetail();
   updateLabels();
   renderLayerPanel();
 }
@@ -972,8 +1027,12 @@ async function setFocusArea(key, { fit = true } = {}) {
     let data;
     try { data = await loadFocusAreas(kind); }
     catch (err) { console.error('focus area', err); toast(`โหลดขอบเขต${FOCUS_KINDS[kind].title}ไม่สำเร็จ`); return; }
-    const f = data.features.find(x => x.properties.code === code);
+    let f = data.features.find(x => x.properties.code === code);
     if (!f) { store.set('focus:area', null); return; }
+    try {   // รูปละเอียด (simplify 25 ม.) · โหลดไม่ได้ใช้รูปหยาบแทน
+      const r = await fetch(`data/detail/${kind === 'prov' ? 'prov' : 'basin'}/${code}.json`);
+      if (r.ok) { const d = await r.json(); f = { ...d, properties: { ...d.properties, name: f.properties.name } }; }
+    } catch (err) { console.warn('focus detail', err); }
     const [[w, s], [e, n]] = geomBounds(f);
     focusArea = { key, kind, code, name: FOCUS_KINDS[kind].label(f.properties.name), feature: f, bbox: [w, s, e, n], bounds: [[w, s], [e, n]] };
   }
@@ -1070,6 +1129,11 @@ $('focusChipFade').onclick = () => { setFocusFade(!focusFade); toast(focusFade ?
  *  ขอบเขตอำเภอ (data/amphoes-area.geojson จาก tha_admin3.gpkg ชุดเดียวกับเส้นอำเภอ) โหลดหลังแอปเปิดเสร็จ
  * ============================================================ */
 let visitAmphoeFC = emptyFC(), amphoeAreasPromise = null;
+const amphoeDetailCache = new Map();
+const amphoeDetail = code => {
+  if (!amphoeDetailCache.has(code)) amphoeDetailCache.set(code, fetch(`data/detail/amphoe/${code}.json`).then(r => r.ok ? r.json() : null).catch(() => null));
+  return amphoeDetailCache.get(code);
+};
 function loadAmphoeAreas() {
   if (!amphoeAreasPromise) amphoeAreasPromise = fetch('data/amphoes-area.geojson', { cache: 'no-cache' })
     .then(r => { if (!r.ok) throw new Error(r.status); return r.json(); })
@@ -1083,13 +1147,16 @@ async function updateVisitAmphoes() {
   if (pts.length) {
     try { list = await loadAmphoeAreas(); } catch (err) { console.error('amphoes-area', err); return; }
   }
-  const hits = new Set();
+  // หาอำเภอด้วยรูปละเอียด: อำเภอที่กรอบหยาบใกล้จุด → โหลดรูปละเอียดมาตรวจว่าจุดอยู่ข้างใน
+  const hits = new Map(), pad = 0.02;
   for (const p of pts) {
     const [x, y] = p.geometry.coordinates;
-    const a = list.find(({ f, b }) => x >= b[0] && x <= b[2] && y >= b[1] && y <= b[3] && inGeometry(x, y, f.geometry));
-    if (a) hits.add(a.f);
+    const cands = list.filter(({ b }) => x >= b[0] - pad && x <= b[2] + pad && y >= b[1] - pad && y <= b[3] + pad);
+    const details = await Promise.all(cands.map(c => amphoeDetail(c.f.properties.code)));
+    const f = details.find(d => d && inGeometry(x, y, d.geometry)) || (cands.find(c => inGeometry(x, y, c.f.geometry)) || {}).f;
+    if (f) hits.set(f.properties.code, f);
   }
-  visitAmphoeFC = { type: 'FeatureCollection', features: [...hits] };
+  visitAmphoeFC = { type: 'FeatureCollection', features: [...hits.values()] };
   map.getSource('visit-amphoes')?.setData(visitAmphoeFC);
 }
 
@@ -1512,6 +1579,26 @@ function nearestFloodKm(lng, lat, idx) {
   }
   return best <= FLOOD_NEAR_KM ? best : null;
 }
+/* ตำบลที่จุดอยู่: ใช้รูปตำบลละเอียดรายอำเภอ (data/detail/tambon/<อำเภอ>.json) · ระหว่างโหลดใช้รูปหยาบไปก่อน */
+const tambonDetailCache = new Map();   // รหัสอำเภอ → [{ f, b }] | null (กำลังโหลด)
+function tambonAt(lng, lat) {
+  if (!tambonIdx) return null;
+  const cands = tambonIdx.list.filter(({ b }) => inBox(lng, lat, b, 0.01));
+  let pending = false;
+  for (const ac of new Set(cands.map(c => c.f.properties.ac))) {
+    if (!tambonDetailCache.has(ac)) {
+      tambonDetailCache.set(ac, null);
+      fetch(`data/detail/tambon/${ac}.json`).then(r => r.ok ? r.json() : emptyFC())
+        .then(fc => { tambonDetailCache.set(ac, fc.features.map(f => ({ f, b: bboxOf(f) }))); renderFloodPanel(); })
+        .catch(() => tambonDetailCache.set(ac, []));
+    }
+    const list = tambonDetailCache.get(ac);
+    if (list === null) { pending = true; continue; }
+    const hit = list.find(({ f, b }) => inBox(lng, lat, b) && inGeometry(lng, lat, f.geometry));
+    if (hit) return hit;
+  }
+  return cands.find(({ f, b }) => inBox(lng, lat, b) && inGeometry(lng, lat, f.geometry)) || null;
+}
 const raiText = v => v > 0 ? `${Math.round(v).toLocaleString('th-TH')}` : '–';
 function admLabels(p) {   // กรุงเทพฯ ใช้ แขวง/เขต
   const bkk = p.pc === 'TH10';
@@ -1545,7 +1632,7 @@ function renderFloodPanel() {
     dot.className = 'w-3 h-3 rounded-full flex-none bg-emerald-500';
     st.innerHTML = `ไม่อยู่ในพื้นที่น้ำท่วม <span class="text-sm font-normal text-gray-600 whitespace-nowrap">· ${km == null ? `ไม่มีภายใน ${FLOOD_NEAR_KM} กม.` : `ห่าง ${km < 1 ? `${Math.round(km * 1000)} ม.` : `${km.toFixed(1)} กม.`}`}</span>`;
   }
-  const tb = tambonIdx && tambonIdx.list.find(({ f, b }) => inBox(lng, lat, b) && inGeometry(lng, lat, f.geometry));
+  const tb = tambonAt(lng, lat);
   if (tb) {
     const p = tb.f.properties, L = admLabels(p);
     $('fpPlace').textContent = `${L.t}  ${L.a}  ${L.p}`;

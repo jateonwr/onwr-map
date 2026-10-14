@@ -54,7 +54,7 @@ async function openDesigner() {
     addFocusLayers(pm);
     applyPreviewStyle();
     pm.on('movestart', () => { $('dsCanvas').style.opacity = '0.35'; });
-    pm.on('moveend', () => { applyPreviewStyle(); renderPreview(); });
+    pm.on('moveend', () => { applyPreviewStyle(); renderPreview(); updateDetailFor(pm, o => ds.settings.layers[o.id].on); });
     pm.once('idle', renderPreview);
   });
 }
