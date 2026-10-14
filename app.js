@@ -1519,7 +1519,8 @@ function layoutBottomPanels() {
   const sheet = $('infoSheet'), sheetH = sheet.classList.contains('closed') ? 0 : sheet.offsetHeight;
   const lift = floodPanelOn && sheetH ? Math.max(0, sheetH + (wide ? 12 : 0) + 8 - 16) : 0;
   $('floodPanel').style.marginBottom = lift ? `${lift}px` : '';
-  const off = floodPanelOn ? lift + $('floodPanel').offsetHeight + 8 : 0;
+  // ปุ่มขวาล่าง/แถบบันทึก: เลื่อนขึ้นเหนือกล่องน้ำท่วม · ถ้าแผงข้อมูลเปิด (มือถือ) ปล่อยไว้ที่เดิมใต้แผง ไม่ดันขึ้นไปทับปุ่มซูม
+  const off = floodPanelOn && !(sheetH && !wide) ? lift + $('floodPanel').offsetHeight + 8 : 0;
   for (const [id, mb] of Object.entries(BOTTOM_BTN_MB)) $(id).style.marginBottom = off && !wide ? `${mb + off}px` : '';
   $('recBar').style.marginBottom = !off ? '' : wide ? `${off}px` : `${60 + off}px`;
 }
