@@ -31,6 +31,8 @@ const FIELD_LABELS = {
   AREA_NAME: 'ชื่อทุ่ง', PROV_NAM_T: 'จังหวัด', AMPHOE_T: 'อำเภอ', OVER_R: 'รับน้ำจาก', Basin: 'ลุ่มน้ำ',
   STORAGE: 'พื้นที่รับน้ำ (ไร่)', DEPTH: 'ความลึกน้ำ (ม.)', Cap_Pot: 'ความจุศักยภาพ (ล้าน ลบ.ม.)', Cap_MCM: 'ความจุ (ล้าน ลบ.ม.)',
   Status_Now: 'ปริมาณน้ำปัจจุบัน (ล้าน ลบ.ม.)',
+  // พื้นที่น้ำท่วม
+  prov: 'จังหวัด', area_rai: 'พื้นที่ (ไร่)',
   // แหล่งน้ำขนาดใหญ่ / ขนาดกลาง
   name: 'ชื่อ', tambol: 'ตำบล', amphoe: 'อำเภอ', province: 'จังหวัด', storage: 'ความจุ (ล้าน ลบ.ม.)',
   agency: 'หน่วยงาน', Basin22: 'ลุ่มน้ำ', ONWR_Reg: 'สทนช. ภาค', REMARK: 'หมายเหตุ',
@@ -71,6 +73,18 @@ const OVERLAYS = [
         paint: { 'fill-color': TUNG_FILL, 'fill-opacity': op } },
       { id: `${src}-line`, type: 'line', source: src, layout: { 'line-join': 'round' },
         paint: { 'line-color': TUNG_LINE, 'line-width': ['interpolate', ['linear'], ['zoom'], 7, 2, 11, 3, 15, 4] } },
+    ],
+    opacityProps: [['fill', 'fill-opacity', 1]],
+  },
+  {
+    // พื้นที่น้ำท่วมจากภาพดาวเทียม Sentinel-1 (S1D_20261009_1828.kmz) · สีแดงตามไฟล์ต้นฉบับ
+    id: 'flood', name: 'พื้นที่น้ำท่วม (9 ต.ค. 69)', url: 'data/flood-20261009.geojson', visible: true, opacity: 0.6,
+    icon: 'area', swatch: '#ef4444', outline: '#991b1b', titleField: 'prov',
+    countText: data => `${data.features.length.toLocaleString('th-TH')} แปลง · ${Math.round(data.features.reduce((s, f) => s + (f.properties.area_rai || 0), 0)).toLocaleString('th-TH')} ไร่`,
+    layers: (src, op) => [
+      { id: `${src}-fill`, type: 'fill', source: src, paint: { 'fill-color': '#ef4444', 'fill-opacity': op } },
+      { id: `${src}-line`, type: 'line', source: src, layout: { 'line-join': 'round' },
+        paint: { 'line-color': '#991b1b', 'line-opacity': 0.7, 'line-width': ['interpolate', ['linear'], ['zoom'], 8, 0.3, 12, 0.8, 15, 1.2] } },
     ],
     opacityProps: [['fill', 'fill-opacity', 1]],
   },
