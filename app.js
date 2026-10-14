@@ -34,7 +34,7 @@ const FIELD_LABELS = {
   // พื้นที่น้ำท่วม
   prov: 'จังหวัด', area_rai: 'พื้นที่ (ไร่)',
   // คลอง กทม.
-  detail: 'รายละเอียด',
+  detail: 'รายละเอียด', kind: 'ประเภท',
   // แหล่งน้ำขนาดใหญ่ / ขนาดกลาง
   name: 'ชื่อ', tambol: 'ตำบล', amphoe: 'อำเภอ', province: 'จังหวัด', storage: 'ความจุ (ล้าน ลบ.ม.)',
   agency: 'หน่วยงาน', Basin22: 'ลุ่มน้ำ', ONWR_Reg: 'สทนช. ภาค', REMARK: 'หมายเหตุ',
@@ -198,10 +198,10 @@ const OVERLAYS = [
     opacityProps: [['line', 'line-opacity', 1]],
   },
   {
-    // คลอง กทม. สายหลัก 18 สาย (คลองสายหลักV3.shp เฉพาะ Type = คลองสายหลัก) · สีเดียวกับลำน้ำสาขา
+    // คลอง กทม. สายหลัก: คลองสายหลัก 18 สาย (คลองสายหลักV3.shp) + ทางน้ำ/คลองชลประทาน (คลองสายหลัก_boyd.shp) · สีเดียวกับลำน้ำสาขา
     id: 'canals-bkk', name: 'คลอง กทม. สายหลัก', url: 'data/canals-bkk.geojson', visible: true, opacity: 1,
     icon: 'line', swatch: '#0ea5e9', titleField: 'name',
-    countText: data => `${data.features.length} สาย`,
+    countText: data => `${data.features.length} รายการ`,
     layers: (src, op) => [
       { id: `${src}-line`, type: 'line', source: src, layout: { 'line-cap': 'round', 'line-join': 'round' },
         paint: { 'line-color': '#0ea5e9', 'line-opacity': op,
