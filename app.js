@@ -210,6 +210,18 @@ const OVERLAYS = [
     opacityProps: [['line', 'line-opacity', 1]],
   },
   {
+    // คลอง กทม. (ฝั่งตะวันออก) 57 สาย (Stream_คลองจุดสูบน้ำ.shp) · ฟ้าเข้มกว่าลำน้ำสาขา เส้นหนากว่าเล็กน้อย
+    id: 'canals-bkk-east', name: 'คลอง กทม. (ฝั่งตะวันออก)', url: 'data/canals-bkk-east.geojson', visible: true, opacity: 1,
+    icon: 'line', swatch: '#0369a1', titleField: 'name',
+    countText: data => `${data.features.length} สาย`,
+    layers: (src, op) => [
+      { id: `${src}-line`, type: 'line', source: src, layout: { 'line-cap': 'round', 'line-join': 'round' },
+        paint: { 'line-color': '#0369a1', 'line-opacity': op,
+                 'line-width': ['interpolate', ['linear'], ['zoom'], 6, 1.2, 10, 2.4, 15, 4.5] } },
+    ],
+    opacityProps: [['line', 'line-opacity', 1]],
+  },
+  {
     id: 'streams-main', name: 'ลำน้ำหลัก', url: 'data/streams-main.geojson', visible: true, opacity: 1,
     icon: 'line-thick', swatch: '#1d4ed8', titleField: 'STREAM_NAM',
     lineLabels: 'data/streams-main-labels.json',   // จุดวางชื่อตามแนวแม่น้ำ (คำนวณไว้ล่วงหน้า: ตำแหน่ง, มุม, ซูมขั้นต่ำ)
