@@ -237,8 +237,11 @@ const OVERLAYS = [
     opacityProps: [['casing', 'line-opacity', 0.8], ['line', 'line-opacity', 1]],
   },
   {
-    id: 'stations', name: 'สถานี', url: 'data/stations.geojson', visible: false, opacity: 1,
+    // สถานี: ข้อมูลจาก Google Sheet (ตั้งลิงก์ใน sheet.js → POINT_SHEETS) · data/stations.geojson เป็นไฟล์สำรอง
+    id: 'stations', name: 'สถานี', visible: false, opacity: 1,
     icon: 'circle', swatch: '#f97316', titleField: 'stn_code',
+    loader: () => loadStationPoints(),
+    countText: data => `${data.features.length} สถานี`,
     labels: true, labelClass: 'stn-label', labelMinZoom: 7.5, labelAnchor: 'left', labelOffset: [10, 0],
     layers: (src, op) => [
       { id: `${src}-circle`, type: 'circle', source: src,
@@ -248,7 +251,7 @@ const OVERLAYS = [
     opacityProps: [['circle', 'circle-opacity', 1], ['circle', 'circle-stroke-opacity', 1]],
   },
   {
-    // จุดลงพื้นที่: ข้อมูลจาก Google Sheet (ตั้งลิงก์ใน sheet.js → VISIT_SHEET)
+    // จุดลงพื้นที่: ข้อมูลจาก Google Sheet (ตั้งลิงก์ใน sheet.js → POINT_SHEETS)
     id: 'visits', name: 'จุดลงพื้นที่', visible: true, opacity: 1,
     icon: 'star', swatch: '#dc2626', titleField: 'name',
     loader: () => loadVisitPoints(),

@@ -236,51 +236,67 @@ for (const cfg of SHEETS) {
 
 
 /* ============================================================
- *  จุดลงพื้นที่ — ทั้งชั้นข้อมูลมาจาก Google Sheet
- *  คอลัมน์: ชื่อ | lat | lon | (คอลัมน์อื่น ๆ แสดงในแผงข้อมูล)
+ *  ชั้นข้อมูลจุด — ทั้งชั้นมาจาก Google Sheet (จุดลงพื้นที่ · สถานี)
+ *  คอลัมน์: ชื่อ/รหัส | lat | lon | (คอลัมน์อื่น ๆ แสดงในแผงข้อมูล)
  * ============================================================ */
 
-const VISIT_SHEET = {
-  layer: 'visits',
-  url: 'https://docs.google.com/spreadsheets/d/1IsSuRMH1-xvyKkdiI-nDYWerCpmSU_5fjJMgRtVBfqc/edit?usp=sharing',
-  latHeaders: ['lat', 'ละติจูด', 'latitude'],
-  lonHeaders: ['lon', 'lng', 'long', 'ลองจิจูด', 'longitude'],
-};
-const visitState = { fetchedAt: 0, error: null, skipped: [] };
+const LAT_HEADERS = ['lat', 'ละติจูด', 'latitude'];
+const LON_HEADERS = ['lon', 'lng', 'long', 'ลองจิจูด', 'longitude'];
+const POINT_SHEETS = [
+  {
+    layer: 'visits', nameField: 'name', cacheKey: 'sheet:visits',
+    url: 'https://docs.google.com/spreadsheets/d/1IsSuRMH1-xvyKkdiI-nDYWerCpmSU_5fjJMgRtVBfqc/edit?usp=sharing',
+  },
+  {
+    // สถานี: คอลัมน์แรก = รหัสสถานี (แสดงบนแผนที่) · ถ้าดึง Sheet ไม่ได้และยังไม่เคยมีค่าในเครื่อง ใช้ไฟล์ฝังสำรอง
+    layer: 'stations', nameField: 'stn_code', cacheKey: 'sheet:stations', fallbackUrl: 'data/stations.geojson',
+    url: 'https://docs.google.com/spreadsheets/d/1l3vbuYbWKyl-8yF6TG7t7XpDCzz_PW44KBJR02FhPSc/edit?usp=sharing',
+  },
+];
+const pointSheetState = Object.fromEntries(POINT_SHEETS.map(c => [c.layer, { fetchedAt: 0, error: null, skipped: [] }]));
+const pointSheetCfg = layer => POINT_SHEETS.find(c => c.layer === layer);
 
-async function loadVisitPoints() {
-  const url = sheetCsvUrl(VISIT_SHEET.url);
+async function loadPointSheet(layer) {
+  const cfg = pointSheetCfg(layer), state = pointSheetState[layer];
+  const url = sheetCsvUrl(cfg.url);
   let headers, rows;
   try {
     const res = await fetch(url, { cache: 'no-store' });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const text = await res.text();
     if (/^\s*</.test(text)) throw new Error('ได้หน้าเว็บแทน CSV');
-    rows = parseCSV(text.replace(/^\uFEFF/, '')).map(r => r.map(c => c.trim()));
+    rows = parseCSV(text.replace(/^﻿/, '')).map(r => r.map(c => c.trim()));
     headers = rows.shift() || [];
-    visitState.error = null;
-    visitState.fetchedAt = Date.now();
-    store.set('sheet:visits', { headers, rows, fetchedAt: visitState.fetchedAt });
+    state.error = null;
+    state.fetchedAt = Date.now();
+    store.set(cfg.cacheKey, { headers, rows, fetchedAt: state.fetchedAt });
   } catch (err) {
-    console.error('Google Sheet: visits', err);
-    visitState.error = 'ดึงข้อมูลไม่สำเร็จ — ตรวจว่าแชร์ Sheet แบบ "ทุกคนที่มีลิงก์" แล้ว';
-    const cached = store.get('sheet:visits', null);
+    console.error(`Google Sheet: ${layer}`, err);
+    state.error = 'ดึงข้อมูลไม่สำเร็จ — ตรวจว่าแชร์ Sheet แบบ "ทุกคนที่มีลิงก์" แล้ว';
+    const cached = store.get(cfg.cacheKey, null);
     headers = cached ? cached.headers : [];
     rows = cached ? cached.rows : [];
-    if (cached) visitState.fetchedAt = cached.fetchedAt;
+    if (cached) state.fetchedAt = cached.fetchedAt;
+    else if (cfg.fallbackUrl) {   // ไม่มีค่าเก่าในเครื่อง → ใช้ไฟล์ฝังแทน
+      try {
+        const fb = await (await fetch(cfg.fallbackUrl, { cache: 'no-cache' })).json();
+        state.error += ' (ใช้ข้อมูลที่ฝังไว้ในแอปแทน)';
+        return fb;
+      } catch { /* ใช้ชีตว่าง */ }
+    }
   }
 
   const hs = headers.map(h => h.toLowerCase());
-  const latI = hs.findIndex(h => VISIT_SHEET.latHeaders.includes(h));
-  const lonI = hs.findIndex(h => VISIT_SHEET.lonHeaders.includes(h));
-  visitState.skipped = [];
+  const latI = hs.findIndex(h => LAT_HEADERS.includes(h));
+  const lonI = hs.findIndex(h => LON_HEADERS.includes(h));
+  state.skipped = [];
   const features = [];
   for (const r of rows) {
     if (!r.some(Boolean)) continue;
     let lat = toNumber(r[latI]), lon = toNumber(r[lonI]);
     if (lat != null && lon != null && Math.abs(lat) > 90) [lat, lon] = [lon, lat];   // กรอกสลับคอลัมน์
-    if (lat == null || lon == null || Math.abs(lat) > 90 || Math.abs(lon) > 180) { visitState.skipped.push(r[0] || '(ไม่มีชื่อ)'); continue; }
-    const props = { name: r[0] || '(ไม่มีชื่อ)', lat, lng: lon, label_lat: lat, label_lng: lon };
+    if (lat == null || lon == null || Math.abs(lat) > 90 || Math.abs(lon) > 180) { state.skipped.push(r[0] || '(ไม่มีชื่อ)'); continue; }
+    const props = { [cfg.nameField]: r[0] || '(ไม่มีชื่อ)', lat, lng: lon, label_lat: lat, label_lng: lon };
     headers.forEach((h, i) => {
       if (i === 0 || i === latI || i === lonI || !h || !r[i]) return;
       props[h] = r[i];
@@ -290,30 +306,40 @@ async function loadVisitPoints() {
   }
   return { type: 'FeatureCollection', features };
 }
+const loadVisitPoints = () => loadPointSheet('visits');
+const loadStationPoints = () => loadPointSheet('stations');
 
 /* โหลดใหม่ระหว่างใช้งาน → อัปเดตจุด + ป้ายชื่อ */
-async function refreshVisitPoints() {
-  const o = OVERLAYS.find(x => x.id === VISIT_SHEET.layer), st = overlayState[o.id];
-  if (!map.getSource(o.id)) return;
-  const data = await loadVisitPoints();
+async function refreshPointSheet(layer) {
+  const o = OVERLAYS.find(x => x.id === layer), st = overlayState[layer];
+  if (!map.getSource(layer)) return;
+  const data = await loadPointSheet(layer);
   data.features.forEach((f, i) => { f.id = i; });
   st.data = data;
   st.bounds = data.features.length ? geomBounds(data) : null;
-  map.getSource(o.id).setData(data);
+  map.getSource(layer).setData(data);
   st.labels.forEach(m => m.remove());
   createLabels(o);
   updateLabels();
   renderLayerPanel();
 }
 
-layerNotes[VISIT_SHEET.layer] = () => {
-  const parts = [];
-  if (visitState.error) parts.push(`<span class="text-red-600">${visitState.error}</span>`);
-  if (visitState.skipped.length) parts.push(`<span class="text-amber-700">พิกัดไม่ถูกต้อง (ข้าม): ${visitState.skipped.map(escapeHtml).join(', ')}</span>`);
-  return parts.length ? `<div class="text-xs text-gray-500 mt-0.5">${parts.join('<br>')}</div>` : '';
-};
+for (const cfg of POINT_SHEETS) {
+  const state = pointSheetState[cfg.layer];
+  layerNotes[cfg.layer] = () => {
+    const parts = [];
+    if (state.error) parts.push(`<span class="text-red-600">${state.error}</span>`);
+    if (state.skipped.length) parts.push(`<span class="text-amber-700">พิกัดไม่ถูกต้อง (ข้าม): ${state.skipped.map(escapeHtml).join(', ')}</span>`);
+    return parts.length ? `<div class="text-xs text-gray-500 mt-0.5">${parts.join('<br>')}</div>` : '';
+  };
+}
 
-setInterval(() => { if (document.visibilityState === 'visible') refreshVisitPoints(); }, SHEET_COMMON.refreshMinutes * 60000);
+setInterval(() => {
+  if (document.visibilityState === 'visible') POINT_SHEETS.forEach(c => refreshPointSheet(c.layer));
+}, SHEET_COMMON.refreshMinutes * 60000);
 document.addEventListener('visibilitychange', () => {
-  if (document.visibilityState === 'visible' && Date.now() - visitState.fetchedAt > SHEET_COMMON.refreshMinutes * 60000) refreshVisitPoints();
+  if (document.visibilityState !== 'visible') return;
+  for (const c of POINT_SHEETS) {
+    if (Date.now() - pointSheetState[c.layer].fetchedAt > SHEET_COMMON.refreshMinutes * 60000) refreshPointSheet(c.layer);
+  }
 });
