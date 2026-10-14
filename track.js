@@ -223,13 +223,18 @@ onMapReady.push(() => {
 const ICON_PAUSE = '<svg class="w-6 h-6" viewBox="0 0 24 24" fill="currentColor"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg>';
 const ICON_PLAY = '<svg class="w-6 h-6" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>';
 
+/* ปุ่มบันทึก: ยังแสดงระหว่างบันทึก (ไอคอนกระพริบ = กำลังบันทึก · เทา = พัก) · กดเพื่อซ่อน/แสดงแถบบันทึก */
+let recBarCollapsed = false;
 function updateRecUI() {
-  const on = !!rec;
-  $('recBar').classList.toggle('hidden', !on);
-  $('recBar').classList.toggle('flex', on);
-  $('btnRecord').classList.toggle('hidden', on);
+  const on = !!rec, barOn = on && !recBarCollapsed;
+  $('recBar').classList.toggle('hidden', !barOn);
+  $('recBar').classList.toggle('flex', barOn);
+  $('recIcon').className = `relative w-4 h-4 rounded-full ${!on ? 'bg-red-600 ring-4 ring-red-100'
+    : rec.paused ? 'bg-gray-400 ring-4 ring-gray-200' : 'bg-red-600 ring-4 ring-red-200 animate-pulse'}`;
+  $('recIcon').innerHTML = on && !rec.paused ? '<span class="absolute inset-0 rounded-full bg-red-500 animate-ping"></span>' : '';
+  $('btnRecord').setAttribute('aria-label', !on ? 'บันทึกเส้นทาง' : barOn ? 'ซ่อนแถบบันทึก' : 'แสดงแถบบันทึก (กำลังบันทึก)');
   clearInterval(recTimer);
-  if (!on) return;
+  if (!on) { recBarCollapsed = false; return; }
   $('btnRecPause').innerHTML = rec.paused ? ICON_PLAY : ICON_PAUSE;
   $('btnRecPause').setAttribute('aria-label', rec.paused ? 'บันทึกต่อ' : 'พักการบันทึก');
   $('recDot').className = `w-3 h-3 rounded-full flex-none ${rec.paused ? 'bg-gray-400' : 'bg-red-600 animate-pulse'}`;
@@ -242,7 +247,12 @@ function updateRecUI() {
   recTimer = setInterval(tickRec, 1000);
 }
 
-$('btnRecord').onclick = () => { if (longPressed) { longPressed = false; return; } startRecording(); };   // กดค้าง = เปิดรอบที่บันทึก
+$('btnRecord').onclick = () => {   // กดค้าง = เปิดรอบที่บันทึก
+  if (longPressed) { longPressed = false; return; }
+  if (!rec) { recBarCollapsed = false; startRecording(); return; }
+  recBarCollapsed = !recBarCollapsed;   // กำลังบันทึก: ซ่อน/แสดงแถบ
+  updateRecUI();
+};
 $('btnRecPause').onclick = () => rec && (rec.paused ? resumeRecording() : pauseRecording());
 $('btnRecStop').onclick = stopRecording;
 

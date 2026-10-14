@@ -1670,7 +1670,13 @@ function layoutBottomPanels() {
     const top = innerHeight - parseFloat(getComputedStyle(el).bottom) - m - el.offsetHeight;
     el.style.visibility = !wide && top < limit ? 'hidden' : '';   // จอเตี้ยมาก (เช่น มือถือแนวนอน)
   }
-  $('recBar').style.marginBottom = !off ? '' : wide ? `${off}px` : `${60 + off}px`;
+  // แถบบันทึกเส้นทาง: อยู่เหนือกล่องน้ำท่วม และเหนือแผงข้อมูลเลเยอร์ (ไม่ทับกัน) · แผงข้อมูลขยายสูงมาก → ปล่อยให้แผงทับ
+  let recMb = !off ? 0 : wide ? off : 60 + off;
+  if (sheetH && !covered && sheetH < innerHeight * 0.55) {
+    const aboveSheet = floodPanelOn && lift ? lift + $('floodPanel').offsetHeight + 8 : sheetH + (wide ? 12 : 0) + 8 - 16;
+    recMb = Math.max(recMb, aboveSheet);
+  }
+  $('recBar').style.marginBottom = recMb ? `${recMb}px` : '';
 }
 window.addEventListener('resize', layoutBottomPanels);
 new ResizeObserver(layoutBottomPanels).observe($('floodPanel'));   // ความสูงกล่องเปลี่ยนตามข้อความ
