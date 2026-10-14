@@ -265,7 +265,11 @@ const OVERLAYS = [
     loader: () => loadVisitPoints(),
     countText: data => `${data.features.length} จุด`,
     labels: true, labelClass: 'visit-label', labelMinZoom: 7.5, labelAnchor: 'left', labelOffset: [13, 0],
+    // อำเภอที่มีจุดลงพื้นที่: ขอบสีเหลืองเข้ม ไม่มีพื้น (คำนวณจากตำแหน่งจุด → updateVisitAmphoes)
+    extraSources: { 'visit-amphoes': () => visitAmphoeFC },
     layers: (src, op) => [
+      { id: 'visit-amphoes-line', type: 'line', source: 'visit-amphoes', layout: { 'line-join': 'round', 'line-cap': 'round' },
+        paint: { 'line-color': '#ca8a04', 'line-width': ['interpolate', ['linear'], ['zoom'], 5, 2, 8, 3, 11, 4.5, 14, 6] } },
       { id: `${src}-icon`, type: 'symbol', source: src,
         layout: { 'icon-image': 'star-red', 'icon-allow-overlap': true, 'icon-ignore-placement': true,
                   'icon-size': ICON_SIZE_BY_ZOOM },
@@ -393,6 +397,7 @@ function addOverlayLayers(m, { onlyVisible = false, onlyIds = null } = {}) {
     // วางใต้ชั้นข้อมูลถัดไปที่มีอยู่แล้ว (ลำดับเดียวกับ OVERLAYS)
     const next = OVERLAYS.slice(i + 1).map(x => x.layers(x.id, 1)[0].id).find(id => m.getLayer(id));
     m.addSource(o.id, { type: 'geojson', data: st.data });
+    for (const [sid, fn] of Object.entries(o.extraSources || {})) if (!m.getSource(sid)) m.addSource(sid, { type: 'geojson', data: fn() });
     for (const l of o.layers(o.id, st.opacity)) {
       l.layout = { ...(l.layout || {}), visibility: st.visible ? 'visible' : 'none' };
       m.addLayer(l, next);
@@ -469,6 +474,7 @@ map.on('load', async () => {
   for (const o of OVERLAYS) {
     if (!map.getSource(o.id)) continue;
     const st = overlayState[o.id];
+    for (const [sid, fn] of Object.entries(o.extraSources || {})) if (!map.getSource(sid)) map.addSource(sid, { type: 'geojson', data: fn() });
     for (const l of o.layers(o.id, st.opacity)) {
       l.layout = { ...(l.layout || {}), visibility: st.visible ? 'visible' : 'none' };
       map.addLayer(l);
@@ -486,6 +492,7 @@ map.on('load', async () => {
 
   renderLayerPanel();
   updateLabels();
+  updateVisitAmphoes();
   if (lastFix) updateZone(lastFix);
   const oldBasin = store.get('focus:basin', null);   // ค่าที่จำไว้จากรุ่นก่อน (เน้นได้เฉพาะลุ่มน้ำ)
   const savedFocus = store.get('focus:area', oldBasin ? `basin:${oldBasin}` : null);
@@ -1059,6 +1066,34 @@ $('focusChipClear').onclick = () => setFocusArea(null);
 $('focusChipFade').onclick = () => { setFocusFade(!focusFade); toast(focusFade ? 'พื้นที่รอบนอก: ขาวจาง' : 'พื้นที่รอบนอก: ขาวทึบ'); };
 
 /* ============================================================
+ *  อำเภอที่มีจุดลงพื้นที่ → ขอบสีเหลืองเข้ม (ไม่มีพื้น)
+ *  ขอบเขตอำเภอ (data/amphoes-area.geojson จาก tha_admin3.gpkg ชุดเดียวกับเส้นอำเภอ) โหลดหลังแอปเปิดเสร็จ
+ * ============================================================ */
+let visitAmphoeFC = emptyFC(), amphoeAreasPromise = null;
+function loadAmphoeAreas() {
+  if (!amphoeAreasPromise) amphoeAreasPromise = fetch('data/amphoes-area.geojson', { cache: 'no-cache' })
+    .then(r => { if (!r.ok) throw new Error(r.status); return r.json(); })
+    .then(d => d.features.map(f => { const [[w, s], [e, n]] = geomBounds(f); return { f, b: [w, s, e, n] }; }))
+    .catch(err => { amphoeAreasPromise = null; throw err; });
+  return amphoeAreasPromise;
+}
+async function updateVisitAmphoes() {
+  const pts = (overlayState.visits.data || emptyFC()).features;
+  let list = [];
+  if (pts.length) {
+    try { list = await loadAmphoeAreas(); } catch (err) { console.error('amphoes-area', err); return; }
+  }
+  const hits = new Set();
+  for (const p of pts) {
+    const [x, y] = p.geometry.coordinates;
+    const a = list.find(({ f, b }) => x >= b[0] && x <= b[2] && y >= b[1] && y <= b[3] && inGeometry(x, y, f.geometry));
+    if (a) hits.add(a.f);
+  }
+  visitAmphoeFC = { type: 'FeatureCollection', features: [...hits] };
+  map.getSource('visit-amphoes')?.setData(visitAmphoeFC);
+}
+
+/* ============================================================
  *  แผง (sheet) เปิด/ปิด + ลากลงเพื่อปิด
  * ============================================================ */
 
@@ -1114,7 +1149,7 @@ for (const id of ['layerSheet', 'infoSheet']) {
  *  แตะ feature → แสดงข้อมูล
  * ============================================================ */
 
-const clickableLayers = () => OVERLAYS.filter(o => !o.noClick).flatMap(o => o.layers(o.id, 1).map(l => l.id))
+const clickableLayers = () => OVERLAYS.filter(o => !o.noClick).flatMap(o => o.layers(o.id, 1).filter(l => l.source === o.id).map(l => l.id))
   .filter(id => map.getLayer(id) && map.getLayoutProperty(id, 'visibility') !== 'none' && !/-(casing|label2?)$/.test(id));
 
 map.on('click', e => {

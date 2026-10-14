@@ -322,6 +322,7 @@ async function refreshPointSheet(layer) {
   createLabels(o);
   updateLabels();
   renderLayerPanel();
+  if (layer === 'visits') updateVisitAmphoes();
 }
 
 for (const cfg of POINT_SHEETS) {
