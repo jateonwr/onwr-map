@@ -256,6 +256,9 @@
       <div id="recTime" class="font-semibold tabular-nums truncate">00:00:00</div>
       <div id="recDist" class="text-xs text-gray-500 tabular-nums truncate">0.00 กม.</div>
     </div>
+    <button id="btnRecList" aria-label="รอบที่บันทึก" class="w-11 h-11 rounded-full grid place-items-center bg-gray-100 text-gray-700 active:bg-gray-200">
+      <svg class="w-5 h-5" viewBox="0 0 24 24" fill="currentColor"><path d="M3 13h2v-2H3v2zm0 4h2v-2H3v2zm0-8h2V7H3v2zm4 4h14v-2H7v2zm0 4h14v-2H7v2zM7 7v2h14V7H7z"/></svg>
+    </button>
     <button id="btnRecPause" aria-label="พักการบันทึก" class="w-11 h-11 rounded-full grid place-items-center bg-gray-100 text-gray-700 active:bg-gray-200"></button>
     <button id="btnRecStop" aria-label="หยุดบันทึก" class="w-11 h-11 rounded-full grid place-items-center bg-red-600 text-white active:bg-red-700">
       <svg class="w-5 h-5" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="6" width="12" height="12" rx="1.5"/></svg>
@@ -315,7 +318,11 @@
       <div class="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">ข้อมูลซ้อนทับ</div>
       <div id="overlayList" class="flex flex-col gap-3"></div>
       <div class="text-xs font-semibold text-gray-500 uppercase tracking-wide mt-6 mb-2">เส้นทางที่บันทึก</div>
-      <div id="trackList" class="flex flex-col gap-2"></div>
+      <button id="btnOpenTracks" class="w-full h-12 mb-4 rounded-2xl border border-gray-200 px-4 flex items-center gap-3 text-left active:bg-gray-50">
+        <svg class="w-6 h-6 flex-none" viewBox="0 0 32 32"><path d="M5 25c5-1 4-9 10-10s6-8 12-10" fill="none" stroke="#7c3aed" stroke-width="3" stroke-linecap="round"/></svg>
+        <span class="flex-1 font-medium">รอบที่บันทึก <span id="trackCount" class="text-sm font-normal text-gray-500"></span></span>
+        <svg class="w-5 h-5 text-gray-400" viewBox="0 0 24 24" fill="currentColor"><path d="M10 6 8.6 7.4 13.2 12l-4.6 4.6L10 18l6-6z"/></svg>
+      </button>
     </div>
   </aside>
 
@@ -336,6 +343,24 @@
       </button>
     </div>
     <dl id="infoBody" class="overflow-y-auto px-5 safe-pb text-sm divide-y divide-gray-100"></dl>
+  </aside>
+
+  <!-- รอบที่บันทึก: รายการเส้นทาง + นำเข้า GPX + รายละเอียดแต่ละรอบ -->
+  <aside id="tracksSheet"
+    class="sheet closed fixed z-30 bg-white shadow-2xl flex flex-col
+           left-0 right-0 bottom-0 max-h-[78dvh] rounded-t-2xl
+           md:top-0 md:bottom-0 md:right-auto md:w-[420px] md:max-h-none md:rounded-none md:rounded-r-2xl">
+    <div class="md:hidden pt-2 pb-1 grid place-items-center"><div class="w-10 h-1.5 rounded-full bg-gray-300"></div></div>
+    <div class="flex items-center gap-2 px-5 pt-2 md:pt-[calc(env(safe-area-inset-top)+16px)] pb-2">
+      <h2 class="flex-1 text-lg font-semibold">รอบที่บันทึก</h2>
+      <label class="h-9 px-3 rounded-full bg-gray-100 text-sm font-medium text-gray-700 flex items-center gap-1.5 cursor-pointer active:bg-gray-200">
+        <svg class="w-4 h-4" viewBox="0 0 24 24" fill="currentColor"><path d="M19 12v7H5v-7H3v7c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2v-7h-2zM11 16h2V6.83l2.59 2.58L17 8l-5-5-5 5 1.41 1.41L11 6.83z"/></svg>
+        นำเข้า GPX<input id="gpxInput" type="file" accept=".gpx,application/gpx+xml" multiple class="hidden"></label>
+      <button data-close aria-label="ปิด" class="w-10 h-10 -mr-2 rounded-full grid place-items-center active:bg-gray-100"><svg class="w-6 h-6 text-gray-600" viewBox="0 0 24 24" fill="currentColor"><path d="M19 6.4L17.6 5 12 10.6 6.4 5 5 6.4 10.6 12 5 17.6 6.4 19 12 13.4 17.6 19 19 17.6 13.4 12z"/></svg></button>
+    </div>
+    <div class="overflow-y-auto px-5 safe-pb">
+      <div id="trackList" class="flex flex-col gap-2 pb-4"></div>
+    </div>
   </aside>
 
   <div id="backdrop" class="fixed inset-0 z-20 bg-black/20 hidden md:!hidden"></div>
@@ -439,11 +464,11 @@
   <div id="toast" class="fixed left-1/2 -translate-x-1/2 safe-bottom mb-24 z-40 bg-gray-900 text-white text-sm rounded-lg px-4 py-2.5 shadow-lg hidden max-w-[90vw] text-center"></div>
 
   <!-- เปลี่ยนเลข ?v= ทุกครั้งที่แก้ไฟล์ .js เพื่อให้มือถือโหลดไฟล์ใหม่ -->
-  <script src="app.js?v=103"></script>
-  <script src="sheet.js?v=103"></script>
-  <script src="track.js?v=103"></script>
-  <script src="measure.js?v=103"></script>
-  <script src="export-render.js?v=103"></script>
-  <script src="export.js?v=103"></script>
+  <script src="app.js?v=105"></script>
+  <script src="sheet.js?v=105"></script>
+  <script src="track.js?v=105"></script>
+  <script src="measure.js?v=105"></script>
+  <script src="export-render.js?v=105"></script>
+  <script src="export.js?v=105"></script>
 </body>
 </html>

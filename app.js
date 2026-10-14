@@ -1164,27 +1164,28 @@ async function updateVisitAmphoes() {
  *  แผง (sheet) เปิด/ปิด + ลากลงเพื่อปิด
  * ============================================================ */
 
+const SIDE_SHEETS = ['layerSheet', 'tracksSheet'];   // แผงที่มีฉากหลังมืด (มือถือ) และอยู่ตำแหน่งเดียวกัน (จอกว้าง)
 function openSheet(id) {
-  if (id === 'layerSheet') closeSheet('infoSheet');
+  if (SIDE_SHEETS.includes(id)) { closeSheet('infoSheet'); SIDE_SHEETS.filter(x => x !== id).forEach(x => closeSheet(x)); }
   $(id).classList.remove('closed');
-  if (id === 'layerSheet') $('backdrop').classList.remove('hidden');
+  if (SIDE_SHEETS.includes(id)) $('backdrop').classList.remove('hidden');
 }
 function closeSheet(id) {
   $(id).classList.add('closed');
-  if (id === 'layerSheet') $('backdrop').classList.add('hidden');
+  if (SIDE_SHEETS.includes(id) && SIDE_SHEETS.every(x => $(x).classList.contains('closed'))) $('backdrop').classList.add('hidden');
   if (id === 'infoSheet') {
     selectedInfo = null; map.getSource('selected')?.setData(emptyFC());
   }
   setTimeout(() => { if ($(id).classList.contains('closed')) $(id).style.maxHeight = ''; }, 300);   // ปิดแล้วกลับขนาดเริ่มต้น
 }
 $('btnLayers').onclick = () => $('layerSheet').classList.contains('closed') ? openSheet('layerSheet') : closeSheet('layerSheet');
-$('backdrop').onclick = () => closeSheet('layerSheet');
+$('backdrop').onclick = () => SIDE_SHEETS.forEach(closeSheet);
 document.querySelectorAll('[data-close]').forEach(b => b.onclick = () => closeSheet(b.closest('aside').id));
 
 /* ลากแผงล่าง (มือถือ): ปรับความสูงได้ต่อเนื่อง ปล่อยตรงไหนหยุดตรงนั้น · ลากลงต่ำมาก/ปัดลงเร็ว = ปิด
    แตะในส่วนที่เลื่อนได้ = เลื่อนเนื้อหาอย่างเดียว · ลากแผงจากแถบจับ/หัวแผง (หรือเนื้อหาที่สั้นจนไม่ต้องเลื่อน) */
 const SHEET_MAX = 0.85, SHEET_CLOSE_H = 120;
-for (const id of ['layerSheet', 'infoSheet']) {
+for (const id of ['layerSheet', 'infoSheet', 'tracksSheet']) {
   const el = $(id);
   let y0 = null, dy = 0, h0 = 0, t0 = 0, lastY = 0, lastT = 0, v = 0;
   el.addEventListener('touchstart', e => {
@@ -1780,6 +1781,33 @@ fixListeners.push(() => {   // อัปเดตไม่เกินวิน�
 });
 
 /* ============================================================ */
+
+/* กล่องถามกลางจอพร้อมช่องพิมพ์ → Promise<string | null> (null = ยกเลิก) */
+function promptModal(message, value = '', { ok = 'ตกลง', cancel = 'ยกเลิก', danger = false, placeholder = '' } = {}) {
+  return new Promise(resolve => {
+    const wrap = document.createElement('div');
+    wrap.className = 'fixed inset-0 z-50 grid place-items-center bg-black/40 p-6';
+    wrap.innerHTML = `
+      <form role="dialog" aria-modal="true" class="w-full max-w-[360px] rounded-2xl bg-white shadow-2xl p-5">
+        <p class="text-[17px] leading-snug text-gray-900 whitespace-pre-line"></p>
+        <input type="text" maxlength="80" class="mt-3 w-full h-11 rounded-xl border border-gray-300 px-3 text-[15px] focus:outline-none focus:ring-2 focus:ring-blue-500">
+        <div class="mt-5 grid grid-cols-2 gap-3">
+          <button type="button" data-r="0" class="h-12 rounded-xl bg-gray-100 text-gray-800 font-medium active:bg-gray-200">${cancel}</button>
+          <button type="submit" class="h-12 rounded-xl text-white font-semibold ${danger ? 'bg-red-600 active:bg-red-700' : 'bg-blue-600 active:bg-blue-700'}">${ok}</button>
+        </div>
+      </form>`;
+    wrap.querySelector('p').textContent = message;
+    const input = wrap.querySelector('input');
+    input.value = value; input.placeholder = placeholder;
+    const done = v => { wrap.remove(); document.removeEventListener('keydown', onKey); resolve(v); };
+    const onKey = e => { if (e.key === 'Escape') done(null); };
+    wrap.querySelector('form').addEventListener('submit', e => { e.preventDefault(); done(input.value.trim()); });
+    wrap.addEventListener('click', e => { if (e.target.closest('[data-r="0"]') || e.target === wrap) done(null); });
+    document.addEventListener('keydown', onKey);
+    document.body.appendChild(wrap);
+    setTimeout(() => { input.focus(); input.select(); }, 50);
+  });
+}
 
 /* กล่องยืนยันกลางจอ → Promise<boolean> */
 function confirmModal(message, { ok = 'ยืนยัน', cancel = 'ยกเลิก', danger = false } = {}) {
