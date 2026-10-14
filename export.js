@@ -39,6 +39,7 @@ async function openDesigner() {
   setTitleBg(ds.settings.titleBg !== false);
   await Promise.all([document.fonts.load(`600 16px ${FONT_TH}`), document.fonts.load(`700 16px ${FONT_TH}`)]);
   await loadExportAssets(ds.settings);
+  await Promise.all(OVERLAYS.filter(o => o.lazy && ds.settings.layers[o.id].on).map(o => ensureOverlayData(o.id).catch(() => {})));
   if (!ds.open) return;
 
   const pm = ds.pm = new maplibregl.Map({
@@ -471,6 +472,11 @@ $('dsSheetBody').addEventListener('input', async e => {
   if (val) val.textContent = `${v}×`;
   saveExportState();
   if (path.startsWith('layers.')) {
+    const lid = path.split('.')[1], lo = OVERLAYS.find(x => x.id === lid);
+    if (lo && lo.lazy && path.endsWith('.on') && v && ds.pm && !ds.pm.getSource(lid)) {   // ชั้นที่ยังไม่โหลด: โหลดแล้วใส่ในแผนที่ตัวอย่าง
+      try { await ensureOverlayData(lid); } catch { return; }
+      addOverlayLayers(ds.pm, { onlyIds: [lid] });
+    }
     if (ds.pm && ds.pm.getSource('tung')) {
       if (path.endsWith('fillColor') && (path.includes('water-other') || path.includes('visits'))) setPointIcons(ds.pm, ds.settings);
       applyPreviewStyle();

@@ -132,6 +132,30 @@ const OVERLAYS = [
     opacityProps: [['icon', 'icon-opacity', 1]],
   },
   {
+    // ขอบเขตตำบล / อำเภอ (tha_admin3.gpkg ชุดเดียวกับเส้นจังหวัด) · ค่าเริ่มต้นปิด · โหลดเมื่อเปิดใช้ครั้งแรก
+    // สีจางลงตามลำดับ: จังหวัด (ดำ) → อำเภอ (เทาเข้ม) → ตำบล (เทาอ่อน)
+    id: 'tambons', name: 'ขอบเขตตำบล', url: 'data/tambons.geojson', visible: false, opacity: 1, lazy: true,
+    icon: 'boundary', swatch: 'transparent', outline: '#a3a3a3', titleField: 'name', noClick: true,
+    countText: () => '7,425 ตำบล',
+    layers: (src, op) => [
+      { id: `${src}-line`, type: 'line', source: src, layout: { 'line-join': 'round', 'line-cap': 'round' },
+        paint: { 'line-color': '#a3a3a3', 'line-opacity': op,
+                 'line-width': ['interpolate', ['linear'], ['zoom'], 7, 0.4, 10, 0.9, 13, 1.6] } },
+    ],
+    opacityProps: [['line', 'line-opacity', 1]],
+  },
+  {
+    id: 'amphoes', name: 'ขอบเขตอำเภอ', url: 'data/amphoes.geojson', visible: false, opacity: 1, lazy: true,
+    icon: 'boundary', swatch: 'transparent', outline: '#525252', titleField: 'name', noClick: true,
+    countText: () => '928 อำเภอ',
+    layers: (src, op) => [
+      { id: `${src}-line`, type: 'line', source: src, layout: { 'line-join': 'round', 'line-cap': 'round' },
+        paint: { 'line-color': '#525252', 'line-opacity': op,
+                 'line-width': ['interpolate', ['linear'], ['zoom'], 5, 0.6, 8, 1.2, 11, 2, 14, 2.8] } },
+    ],
+    opacityProps: [['line', 'line-opacity', 1]],
+  },
+  {
     // ขอบเขตจังหวัด: เส้นสีดำ ไม่มีพื้น + ชื่อจังหวัด
     id: 'provinces', name: 'ขอบเขตจังหวัด', url: 'data/provinces.geojson', visible: true, opacity: 1,
     icon: 'boundary', swatch: 'transparent', outline: '#000000', titleField: 'name',
@@ -326,15 +350,37 @@ function addMapImages(m, colors = {}) {
 
 /* ใส่ชั้นข้อมูลทั้งหมด (ที่โหลดแล้ว) ลงใน map instance อื่น เช่น แผนที่สำหรับ export */
 function addOverlayLayers(m, { onlyVisible = false, onlyIds = null } = {}) {
-  for (const o of OVERLAYS) {
+  for (const [i, o] of OVERLAYS.entries()) {
     const st = overlayState[o.id];
-    if (!st.data || (onlyVisible && !st.visible) || (onlyIds && !onlyIds.includes(o.id))) continue;
+    if (!st.data || m.getSource(o.id) || (onlyVisible && !st.visible) || (onlyIds && !onlyIds.includes(o.id))) continue;
+    // วางใต้ชั้นข้อมูลถัดไปที่มีอยู่แล้ว (ลำดับเดียวกับ OVERLAYS)
+    const next = OVERLAYS.slice(i + 1).map(x => x.layers(x.id, 1)[0].id).find(id => m.getLayer(id));
     m.addSource(o.id, { type: 'geojson', data: st.data });
     for (const l of o.layers(o.id, st.opacity)) {
       l.layout = { ...(l.layout || {}), visibility: st.visible ? 'visible' : 'none' };
-      m.addLayer(l);
+      m.addLayer(l, next);
     }
   }
+}
+
+/* ชั้นข้อมูลแบบ lazy: โหลดไฟล์เมื่อเปิดใช้ครั้งแรก → Promise<data> */
+function ensureOverlayData(id) {
+  const o = OVERLAYS.find(x => x.id === id), st = overlayState[id];
+  if (st.data) return Promise.resolve(st.data);
+  if (!st.loading) {
+    toast(`กำลังโหลด “${o.name}”…`);
+    st.loading = fetch(o.url, { cache: 'no-cache' })
+      .then(r => { if (!r.ok) throw new Error(r.status); return r.json(); })
+      .then(data => {
+        data.features.forEach((f, i) => { f.id = i; });
+        st.data = data; st.bounds = geomBounds(data);
+        map.getSource(id)?.setData(data);
+        renderLayerPanel();
+        return data;
+      })
+      .catch(err => { st.loading = null; console.error(o.url, err); toast(`โหลด “${o.name}” ไม่สำเร็จ`); throw err; });
+  }
+  return st.loading;
 }
 
 map.on('load', async () => {
@@ -345,6 +391,7 @@ map.on('load', async () => {
 
   await Promise.all(OVERLAYS.map(async o => {
     const st = overlayState[o.id];
+    if (o.lazy && !st.visible) { map.addSource(o.id, { type: 'geojson', data: emptyFC() }); return; }
     try {
       let data;
       if (o.loader) data = await o.loader();                     // ข้อมูลจากที่อื่น (เช่น Google Sheet)
@@ -691,7 +738,7 @@ function renderLayerPanel() {
           <span class="w-9 h-9 rounded-lg flex-none bg-gray-100 grid place-items-center">${layerIcon(o, 26)}</span>
           <div class="flex-1 min-w-0">
             <div class="font-medium">${o.name}</div>
-            <div class="text-xs text-gray-500">${failed ? 'โหลดไม่สำเร็จ' : o.countText ? o.countText(st.data) : `${st.data.features.length} รายการ`}</div>
+            <div class="text-xs text-gray-500">${failed ? 'โหลดไม่สำเร็จ' : o.countText ? o.countText(st.data) : `${st.data.features.length} รายการ`}${o.lazy && !st.data ? ' · โหลดเมื่อเปิด' : ''}</div>
             ${!failed && layerNotes[o.id] ? layerNotes[o.id]() : ''}
           </div>
           <button data-fit="${o.id}" aria-label="ซูมไปที่${o.name}" class="w-10 h-10 rounded-full grid place-items-center active:bg-gray-100 ${failed ? 'hidden' : ''}">
@@ -728,6 +775,7 @@ $('overlayList').addEventListener('change', e => {
   st.visible = e.target.checked;
   store.set(`vis:${id}`, st.visible);
   o.layers(id, st.opacity).forEach(l => map.setLayoutProperty(l.id, 'visibility', st.visible ? 'visible' : 'none'));
+  if (o.lazy && st.visible) ensureOverlayData(id).catch(() => {});
   document.querySelector(`[data-opwrap="${id}"]`)?.classList.toggle('hidden', !st.visible);
   document.querySelector(`[data-legend="${id}"]`)?.classList.toggle('hidden', !st.visible);
   updateLabels();
@@ -773,6 +821,7 @@ function setOverlayVisible(id, on) {
   st.visible = on;
   store.set(`vis:${id}`, on);
   o.layers(id, st.opacity).forEach(l => map.setLayoutProperty(l.id, 'visibility', on ? 'visible' : 'none'));
+  if (o.lazy && on) ensureOverlayData(id).catch(() => {});
   updateLabels();
   renderLayerPanel();
 }
