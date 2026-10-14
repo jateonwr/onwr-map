@@ -1404,11 +1404,11 @@ function renderFloodPanel() {
   const hit = fi.list.find(({ f, b }) => inBox(lng, lat, b) && inGeometry(lng, lat, f.geometry));
   if (hit) {
     dot.className = 'w-3 h-3 rounded-full flex-none bg-red-600 ring-4 ring-red-100';
-    st.innerHTML = `<span class="text-red-700">อยู่ในพื้นที่น้ำท่วม</span> <span class="text-sm font-normal text-gray-600">· แปลงนี้ ${raiText(hit.f.properties.area_rai)} ไร่</span>`;
+    st.innerHTML = `<span class="text-red-700">อยู่ในพื้นที่น้ำท่วม</span> <span class="text-sm font-normal text-gray-600 whitespace-nowrap">· แปลงนี้ ${raiText(hit.f.properties.area_rai)} ไร่</span>`;
   } else {
     const km = nearestFloodKm(lng, lat, fi);
     dot.className = 'w-3 h-3 rounded-full flex-none bg-emerald-500';
-    st.innerHTML = `ไม่อยู่ในพื้นที่น้ำท่วม <span class="text-sm font-normal text-gray-600">· ${km == null ? `ไม่มีภายใน ${FLOOD_NEAR_KM} กม.` : `ห่าง ${km < 1 ? `${Math.round(km * 1000)} ม.` : `${km.toFixed(1)} กม.`}`}</span>`;
+    st.innerHTML = `ไม่อยู่ในพื้นที่น้ำท่วม <span class="text-sm font-normal text-gray-600 whitespace-nowrap">· ${km == null ? `ไม่มีภายใน ${FLOOD_NEAR_KM} กม.` : `ห่าง ${km < 1 ? `${Math.round(km * 1000)} ม.` : `${km.toFixed(1)} กม.`}`}</span>`;
   }
   const tb = tambonIdx && tambonIdx.list.find(({ f, b }) => inBox(lng, lat, b) && inGeometry(lng, lat, f.geometry));
   if (tb) {
@@ -1430,11 +1430,17 @@ function renderFloodPanel() {
   $('fpMeta').textContent = parts.join(' · ');
   layoutBottomPanels();
 }
-/* กล่องน้ำท่วมอยู่ล่างสุด · แถบบันทึกเส้นทางขยับขึ้นไปอยู่เหนือกล่องเมื่อเปิดทั้งคู่ */
+/* กล่องน้ำท่วมอยู่ล่างสุดเต็มความกว้าง (มือถือ) · ปุ่มขวาล่างและแถบบันทึกเส้นทางเลื่อนขึ้นไปอยู่เหนือกล่อง
+   จอกว้าง: กล่องอยู่ซ้าย ปุ่มอยู่ที่เดิม แถบบันทึกเส้นทางอยู่เหนือกล่อง */
+const BOTTOM_BTN_MB = { btnFloodInfo: 0, btnLocate: 60, btnRecord: 136 };
 function layoutBottomPanels() {
-  const rb = $('recBar');
-  rb.style.marginBottom = floodPanelOn ? `${$('floodPanel').offsetHeight + 8}px` : '';
+  const off = floodPanelOn ? $('floodPanel').offsetHeight + 8 : 0;
+  const wide = matchMedia('(min-width: 768px)').matches;
+  for (const [id, mb] of Object.entries(BOTTOM_BTN_MB)) $(id).style.marginBottom = off && !wide ? `${mb + off}px` : '';
+  $('recBar').style.marginBottom = !off ? '' : wide ? `${off}px` : `${60 + off}px`;
 }
+window.addEventListener('resize', layoutBottomPanels);
+new ResizeObserver(layoutBottomPanels).observe($('floodPanel'));   // ความสูงกล่องเปลี่ยนตามข้อความ
 new MutationObserver(layoutBottomPanels).observe($('recBar'), { attributes: true, attributeFilter: ['class'] });
 function setFloodPanel(on) {
   floodPanelOn = on;
@@ -1471,7 +1477,6 @@ $('btnFloodInfo').onclick = () => {
   if (fpMode === 'gps' && watchId == null && startTracking()) { setFollow('follow'); enableOrientation(); }   // เปิดกล่อง = เริ่มติดตามตำแหน่งด้วย
   setFloodPanel(true);
 };
-$('fpClose').onclick = () => setFloodPanel(false);
 fixListeners.push(() => {   // อัปเดตไม่เกินวินาทีละครั้ง (เฉพาะโหมด GPS)
   if (!floodPanelOn || fpMode !== 'gps') return;
   const now = Date.now();
