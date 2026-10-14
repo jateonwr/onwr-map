@@ -1070,29 +1070,43 @@ function openSheet(id) {
 function closeSheet(id) {
   $(id).classList.add('closed');
   if (id === 'layerSheet') $('backdrop').classList.add('hidden');
-  if (id === 'infoSheet') { selectedInfo = null; map.getSource('selected')?.setData(emptyFC()); }
+  if (id === 'infoSheet') {
+    selectedInfo = null; map.getSource('selected')?.setData(emptyFC());
+    delete $(id).dataset.expanded; $(id).style.maxHeight = '';   // ปิดแล้วกลับขนาดเริ่มต้น
+  }
 }
 $('btnLayers').onclick = () => $('layerSheet').classList.contains('closed') ? openSheet('layerSheet') : closeSheet('layerSheet');
 $('backdrop').onclick = () => closeSheet('layerSheet');
 document.querySelectorAll('[data-close]').forEach(b => b.onclick = () => closeSheet(b.closest('aside').id));
 
+/* ลากแผงล่าง (มือถือ): ลงเพื่อปิด · แผงข้อมูลลากขึ้นเพื่อขยาย (ลงอีกครั้ง = กลับขนาดเดิม) */
+const INFO_SHEET_EXPANDED = '78dvh';
 for (const id of ['layerSheet', 'infoSheet']) {
-  const el = $(id);
-  let y0 = null, dy = 0;
+  const el = $(id), expandable = id === 'infoSheet';
+  let y0 = null, dy = 0, h0 = 0, up = false;
   el.addEventListener('touchstart', e => {
+    if (matchMedia('(min-width: 768px)').matches) return;
     const scroller = e.target.closest('.overflow-y-auto');
-    if (matchMedia('(min-width: 768px)').matches || (scroller && scroller.scrollTop > 0)) return;
-    y0 = e.touches[0].clientY; dy = 0; el.style.transition = 'none';
+    const canScroll = scroller && scroller.scrollHeight > scroller.clientHeight + 1;
+    if (scroller && scroller.scrollTop > 0) return;
+    y0 = e.touches[0].clientY; dy = 0; h0 = el.offsetHeight;
+    up = expandable && !el.dataset.expanded && !canScroll;   // ขยายได้: เริ่มลากนอกส่วนเลื่อน หรือเนื้อหาไม่ต้องเลื่อน
+    if (expandable && !el.dataset.expanded && !scroller) up = true;
+    el.style.transition = 'none';
   }, { passive: true });
   el.addEventListener('touchmove', e => {
     if (y0 == null) return;
-    dy = Math.max(0, e.touches[0].clientY - y0);
-    el.style.transform = `translateY(${dy}px)`;
+    dy = e.touches[0].clientY - y0;
+    if (dy < 0 && up) { el.style.maxHeight = `${Math.min(innerHeight * 0.78, h0 - dy)}px`; el.style.transform = ''; }
+    else el.style.transform = `translateY(${Math.max(0, dy)}px)`;
   }, { passive: true });
   el.addEventListener('touchend', () => {
     if (y0 == null) return;
     el.style.transition = ''; el.style.transform = '';
-    if (dy > 80) closeSheet(id);
+    if (dy < -50 && up) { el.dataset.expanded = '1'; el.style.maxHeight = INFO_SHEET_EXPANDED; }
+    else if (dy > 80 && expandable && el.dataset.expanded) { delete el.dataset.expanded; el.style.maxHeight = ''; }
+    else if (dy > 80) closeSheet(id);
+    else el.style.maxHeight = el.dataset.expanded ? INFO_SHEET_EXPANDED : '';
     y0 = null;
   });
 }
@@ -1517,11 +1531,13 @@ function layoutBottomPanels() {
   const wide = matchMedia('(min-width: 768px)').matches;
   // แผงข้อมูล (แตะเลเยอร์) เปิดอยู่ → กล่องน้ำท่วมเลื่อนขึ้นไปอยู่เหนือแผง ไม่ซ้อนกัน
   const sheet = $('infoSheet'), sheetH = sheet.classList.contains('closed') ? 0 : sheet.offsetHeight;
-  const lift = floodPanelOn && sheetH ? Math.max(0, sheetH + (wide ? 12 : 0) + 8 - 16) : 0;
+  let lift = floodPanelOn && sheetH ? Math.max(0, sheetH + (wide ? 12 : 0) + 8 - 16) : 0;
+  if (lift && 16 + lift + $('floodPanel').offsetHeight > innerHeight - ($('zoomBox').getBoundingClientRect().bottom + 8)) lift = 0;
+  const covered = floodPanelOn && sheetH && !lift;   // แผงข้อมูลขยายสูง: กล่องน้ำท่วมอยู่ใต้แผงชั่วคราว
   $('floodPanel').style.marginBottom = lift ? `${lift}px` : '';
   // ปุ่มขวาล่าง/แถบบันทึก: เลื่อนขึ้นเหนือกล่องน้ำท่วม (มือถือ)
   // แผงข้อมูลเปิดด้วย (ที่เหลือน้อย) → เรียง 3 ปุ่มเป็นแถวแนวนอนเหนือกล่อง ไม่ชนปุ่มซูม
-  const off = floodPanelOn ? lift + $('floodPanel').offsetHeight + 8 : 0;
+  const off = floodPanelOn && !covered ? lift + $('floodPanel').offsetHeight + 8 : 0;
   const row = !wide && off && sheetH;
   const ROW = { btnFloodInfo: [16, 0], btnLocate: [72, -4], btnRecord: [136, 0] };   // [ระยะจากขวา, ปรับให้กึ่งกลางตรงกัน]
   const limit = $('zoomBox').getBoundingClientRect().bottom + 8;

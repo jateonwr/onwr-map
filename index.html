@@ -140,7 +140,7 @@
     .switch input:focus-visible + span { outline: 2px solid #1a73e8; outline-offset: 2px; }
 
     /* แผงด้านล่าง (มือถือ) ↔ แผงด้านข้าง (แท็บเล็ต) */
-    .sheet { transition: transform .28s cubic-bezier(.2,.8,.2,1); }
+    .sheet { transition: transform .28s cubic-bezier(.2,.8,.2,1), max-height .28s cubic-bezier(.2,.8,.2,1); }
     .sheet.closed { transform: translateY(110%); }
     #floodPanel, #btnFloodInfo, #btnLocate, #btnRecord, #recBar { transition: margin-bottom .28s cubic-bezier(.2,.8,.2,1), right .28s cubic-bezier(.2,.8,.2,1); }
     @media (min-width: 768px) { .sheet.closed { transform: translateX(-110%); } }
@@ -439,11 +439,11 @@
   <div id="toast" class="fixed left-1/2 -translate-x-1/2 safe-bottom mb-24 z-40 bg-gray-900 text-white text-sm rounded-lg px-4 py-2.5 shadow-lg hidden max-w-[90vw] text-center"></div>
 
   <!-- เปลี่ยนเลข ?v= ทุกครั้งที่แก้ไฟล์ .js เพื่อให้มือถือโหลดไฟล์ใหม่ -->
-  <script src="app.js?v=96"></script>
-  <script src="sheet.js?v=96"></script>
-  <script src="track.js?v=96"></script>
-  <script src="measure.js?v=96"></script>
-  <script src="export-render.js?v=96"></script>
-  <script src="export.js?v=96"></script>
+  <script src="app.js?v=98"></script>
+  <script src="sheet.js?v=98"></script>
+  <script src="track.js?v=98"></script>
+  <script src="measure.js?v=98"></script>
+  <script src="export-render.js?v=98"></script>
+  <script src="export.js?v=98"></script>
 </body>
 </html>
