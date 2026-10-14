@@ -1330,7 +1330,7 @@ function updateZone(fix) {
  *  อยู่ในพื้นที่น้ำท่วมหรือไม่ / ระยะถึงพื้นที่ท่วมใกล้สุด + ต./อ./จ. + พื้นที่ท่วมของตำบล/อำเภอ/จังหวัด
  *  ข้อมูลตำบล (เฉพาะจังหวัดที่มีน้ำท่วมและรอบ ๆ) โหลดเมื่อเปิดกล่องครั้งแรก
  * ============================================================ */
-const FLOOD_DATE_TEXT = '9 ต.ค. 69';
+const FLOOD_SOURCE_TEXT = 'คำนวณจากข้อมูลพื้นที่น้ำท่วม (GISTDA) - 9 ต.ค. 69';
 const TAMBON_URL = 'data/tambon-flood-20261009.geojson';
 const FLOOD_NEAR_KM = 20;          // ค้นหาพื้นที่ท่วมใกล้สุดในรัศมีนี้
 let floodPanelOn = false, tambonPromise = null, tambonIdx = null, floodIdx = null, fpLast = 0;
@@ -1395,7 +1395,7 @@ function renderFloodPanel() {
     dot.className = 'w-3 h-3 rounded-full flex-none bg-gray-300 animate-pulse';
     st.textContent = fpMode === 'pick' ? 'แตะแผนที่เพื่อเลือกจุด' : 'กำลังหาตำแหน่ง GPS…';
     $('fpPlace').textContent = ''; $('fpStats').innerHTML = '';
-    $('fpMeta').textContent = `น้ำท่วมจากดาวเทียม ${FLOOD_DATE_TEXT}`;
+    $('fpMeta').textContent = FLOOD_SOURCE_TEXT;
     layoutBottomPanels(); return;
   }
   const fi = floodIndex();
@@ -1420,14 +1420,7 @@ function renderFloodPanel() {
     $('fpPlace').textContent = tambonIdx ? 'นอกพื้นที่ข้อมูลตำบล (เฉพาะจังหวัดที่มีน้ำท่วมและรอบ ๆ)' : 'กำลังโหลดข้อมูลตำบล…';
     $('fpStats').innerHTML = '';
   }
-  const parts = [`น้ำท่วมจากดาวเทียม ${FLOOD_DATE_TEXT}`];
-  if (fpMode === 'pick') parts.push(`จุดที่เลือก ${lat.toFixed(5)}, ${lng.toFixed(5)}`);
-  else {
-    parts.push(`GPS ±${Math.round(fix.accuracy)} ม.`);
-    if (fix.speed != null && fix.speed >= 0) parts.push(`${Math.round(fix.speed * 3.6)} กม./ชม.`);
-    if (fix.altitude != null) parts.push(`สูง ${Math.round(fix.altitude)} ม.`);
-  }
-  $('fpMeta').textContent = parts.join(' · ');
+  $('fpMeta').textContent = FLOOD_SOURCE_TEXT;
   layoutBottomPanels();
 }
 /* กล่องน้ำท่วมอยู่ล่างสุดเต็มความกว้าง (มือถือ) · ปุ่มขวาล่างและแถบบันทึกเส้นทางเลื่อนขึ้นไปอยู่เหนือกล่อง
