@@ -1072,41 +1072,41 @@ function closeSheet(id) {
   if (id === 'layerSheet') $('backdrop').classList.add('hidden');
   if (id === 'infoSheet') {
     selectedInfo = null; map.getSource('selected')?.setData(emptyFC());
-    delete $(id).dataset.expanded; $(id).style.maxHeight = '';   // ปิดแล้วกลับขนาดเริ่มต้น
   }
+  setTimeout(() => { if ($(id).classList.contains('closed')) $(id).style.maxHeight = ''; }, 300);   // ปิดแล้วกลับขนาดเริ่มต้น
 }
 $('btnLayers').onclick = () => $('layerSheet').classList.contains('closed') ? openSheet('layerSheet') : closeSheet('layerSheet');
 $('backdrop').onclick = () => closeSheet('layerSheet');
 document.querySelectorAll('[data-close]').forEach(b => b.onclick = () => closeSheet(b.closest('aside').id));
 
-/* ลากแผงล่าง (มือถือ): ลงเพื่อปิด · แผงข้อมูลลากขึ้นเพื่อขยาย (ลงอีกครั้ง = กลับขนาดเดิม) */
-const INFO_SHEET_EXPANDED = '78dvh';
+/* ลากแผงล่าง (มือถือ): ปรับความสูงได้ต่อเนื่อง ปล่อยตรงไหนหยุดตรงนั้น · ลากลงต่ำมาก/ปัดลงเร็ว = ปิด
+   แตะในส่วนที่เลื่อนได้ = เลื่อนเนื้อหาอย่างเดียว · ลากแผงจากแถบจับ/หัวแผง (หรือเนื้อหาที่สั้นจนไม่ต้องเลื่อน) */
+const SHEET_MAX = 0.85, SHEET_CLOSE_H = 120;
 for (const id of ['layerSheet', 'infoSheet']) {
-  const el = $(id), expandable = id === 'infoSheet';
-  let y0 = null, dy = 0, h0 = 0, up = false;
+  const el = $(id);
+  let y0 = null, dy = 0, h0 = 0, t0 = 0, lastY = 0, lastT = 0, v = 0;
   el.addEventListener('touchstart', e => {
     if (matchMedia('(min-width: 768px)').matches) return;
-    // แตะในส่วนที่เลื่อนได้ = เลื่อนเนื้อหาอย่างเดียว (ไม่ปิด/ไม่ย่อแผง) · ลากแผงได้จากแถบจับ/หัวแผง หรือเนื้อหาที่สั้นจนไม่ต้องเลื่อน
     const scroller = e.target.closest('.overflow-y-auto');
     if (scroller && scroller.scrollHeight > scroller.clientHeight + 1) return;
-    y0 = e.touches[0].clientY; dy = 0; h0 = el.offsetHeight;
-    up = expandable && !el.dataset.expanded;
+    y0 = lastY = e.touches[0].clientY; dy = 0; v = 0; h0 = el.offsetHeight; t0 = lastT = performance.now();
     el.style.transition = 'none';
   }, { passive: true });
   el.addEventListener('touchmove', e => {
     if (y0 == null) return;
-    dy = e.touches[0].clientY - y0;
-    if (dy < 0 && up) { el.style.maxHeight = `${Math.min(innerHeight * 0.78, h0 - dy)}px`; el.style.transform = ''; }
-    else el.style.transform = `translateY(${Math.max(0, dy)}px)`;
+    const y = e.touches[0].clientY, t = performance.now();
+    if (t > lastT) v = (y - lastY) / (t - lastT);   // px/ms (+ = ลง)
+    lastY = y; lastT = t;
+    dy = y - y0;
+    el.style.maxHeight = `${Math.max(60, Math.min(innerHeight * SHEET_MAX, h0 - dy))}px`;
   }, { passive: true });
   el.addEventListener('touchend', () => {
     if (y0 == null) return;
-    el.style.transition = ''; el.style.transform = '';
-    if (dy < -50 && up) { el.dataset.expanded = '1'; el.style.maxHeight = INFO_SHEET_EXPANDED; }
-    else if (dy > 80 && expandable && el.dataset.expanded) { delete el.dataset.expanded; el.style.maxHeight = ''; }
-    else if (dy > 80) closeSheet(id);
-    else el.style.maxHeight = el.dataset.expanded ? INFO_SHEET_EXPANDED : '';
     y0 = null;
+    el.style.transition = '';
+    const h = h0 - dy;
+    if (h < SHEET_CLOSE_H || (v > 1 && dy > 40)) { closeSheet(id); return; }
+    el.style.maxHeight = `${Math.max(SHEET_CLOSE_H, Math.min(innerHeight * SHEET_MAX, h))}px`;   // หยุดที่ความสูงที่ปล่อย
   });
 }
 
