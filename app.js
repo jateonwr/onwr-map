@@ -1512,16 +1512,26 @@ function renderFloodPanel() {
 }
 /* กล่องน้ำท่วมอยู่ล่างสุดเต็มความกว้าง (มือถือ) · ปุ่มขวาล่างและแถบบันทึกเส้นทางเลื่อนขึ้นไปอยู่เหนือกล่อง
    จอกว้าง: กล่องอยู่ซ้าย ปุ่มอยู่ที่เดิม แถบบันทึกเส้นทางอยู่เหนือกล่อง */
-const BOTTOM_BTN_MB = { btnFloodInfo: 0, btnLocate: 60, btnRecord: 136 };
+const BOTTOM_BTN_MB = { btnFloodInfo: 0, btnLocate: 60, btnRecord: 128 };
 function layoutBottomPanels() {
   const wide = matchMedia('(min-width: 768px)').matches;
   // แผงข้อมูล (แตะเลเยอร์) เปิดอยู่ → กล่องน้ำท่วมเลื่อนขึ้นไปอยู่เหนือแผง ไม่ซ้อนกัน
   const sheet = $('infoSheet'), sheetH = sheet.classList.contains('closed') ? 0 : sheet.offsetHeight;
   const lift = floodPanelOn && sheetH ? Math.max(0, sheetH + (wide ? 12 : 0) + 8 - 16) : 0;
   $('floodPanel').style.marginBottom = lift ? `${lift}px` : '';
-  // ปุ่มขวาล่าง/แถบบันทึก: เลื่อนขึ้นเหนือกล่องน้ำท่วม · ถ้าแผงข้อมูลเปิด (มือถือ) ปล่อยไว้ที่เดิมใต้แผง ไม่ดันขึ้นไปทับปุ่มซูม
-  const off = floodPanelOn && !(sheetH && !wide) ? lift + $('floodPanel').offsetHeight + 8 : 0;
-  for (const [id, mb] of Object.entries(BOTTOM_BTN_MB)) $(id).style.marginBottom = off && !wide ? `${mb + off}px` : '';
+  // ปุ่มขวาล่าง/แถบบันทึก: เลื่อนขึ้นเหนือกล่องน้ำท่วม (มือถือ)
+  // แผงข้อมูลเปิดด้วย (ที่เหลือน้อย) → เรียง 3 ปุ่มเป็นแถวแนวนอนเหนือกล่อง ไม่ชนปุ่มซูม
+  const off = floodPanelOn ? lift + $('floodPanel').offsetHeight + 8 : 0;
+  const row = !wide && off && sheetH;
+  const ROW = { btnFloodInfo: [16, 0], btnLocate: [72, -4], btnRecord: [136, 0] };   // [ระยะจากขวา, ปรับให้กึ่งกลางตรงกัน]
+  const limit = $('zoomBox').getBoundingClientRect().bottom + 8;
+  for (const [id, mb] of Object.entries(BOTTOM_BTN_MB)) {
+    const el = $(id), m = !off || wide ? mb : row ? off + ROW[id][1] : mb + off;
+    el.style.marginBottom = off && !wide ? `${m}px` : '';
+    el.style.right = row ? `${ROW[id][0]}px` : '';
+    const top = innerHeight - parseFloat(getComputedStyle(el).bottom) - m - el.offsetHeight;
+    el.style.visibility = !wide && top < limit ? 'hidden' : '';   // จอเตี้ยมาก (เช่น มือถือแนวนอน)
+  }
   $('recBar').style.marginBottom = !off ? '' : wide ? `${off}px` : `${60 + off}px`;
 }
 window.addEventListener('resize', layoutBottomPanels);

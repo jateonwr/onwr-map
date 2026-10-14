@@ -142,7 +142,7 @@
     /* แผงด้านล่าง (มือถือ) ↔ แผงด้านข้าง (แท็บเล็ต) */
     .sheet { transition: transform .28s cubic-bezier(.2,.8,.2,1); }
     .sheet.closed { transform: translateY(110%); }
-    #floodPanel, #btnFloodInfo, #btnLocate, #btnRecord, #recBar { transition: margin-bottom .28s cubic-bezier(.2,.8,.2,1); }
+    #floodPanel, #btnFloodInfo, #btnLocate, #btnRecord, #recBar { transition: margin-bottom .28s cubic-bezier(.2,.8,.2,1), right .28s cubic-bezier(.2,.8,.2,1); }
     @media (min-width: 768px) { .sheet.closed { transform: translateX(-110%); } }
 
     .maplibregl-ctrl-bottom-left  { bottom: env(safe-area-inset-bottom); }
@@ -245,7 +245,7 @@
 
   <!-- ปุ่มเริ่มบันทึกเส้นทาง -->
   <button id="btnRecord" aria-label="บันทึกเส้นทาง"
-    class="absolute right-4 safe-bottom z-10 w-12 h-12 rounded-full bg-white shadow-lg grid place-items-center active:bg-gray-100 mb-[136px]">
+    class="absolute right-4 safe-bottom z-10 w-12 h-12 rounded-full bg-white shadow-lg grid place-items-center active:bg-gray-100 mb-[128px]">
     <span class="w-4 h-4 rounded-full bg-red-600 ring-4 ring-red-100"></span>
   </button>
 
@@ -322,7 +322,7 @@
   <!-- แผงข้อมูลเมื่อแตะ feature -->
   <aside id="infoSheet"
     class="sheet closed fixed z-20 bg-white shadow-2xl flex flex-col
-           left-0 right-0 bottom-0 max-h-[38dvh] rounded-t-2xl
+           left-0 right-0 bottom-0 max-h-[30dvh] rounded-t-2xl
            md:left-3 md:right-auto md:bottom-3 md:w-[420px] md:max-h-[45dvh] md:rounded-2xl">
     <div class="md:hidden pt-2 pb-1 grid place-items-center"><div class="w-10 h-1.5 rounded-full bg-gray-300"></div></div>
     <div class="flex items-start gap-3 px-5 pt-2 pb-2">
@@ -439,11 +439,11 @@
   <div id="toast" class="fixed left-1/2 -translate-x-1/2 safe-bottom mb-24 z-40 bg-gray-900 text-white text-sm rounded-lg px-4 py-2.5 shadow-lg hidden max-w-[90vw] text-center"></div>
 
   <!-- เปลี่ยนเลข ?v= ทุกครั้งที่แก้ไฟล์ .js เพื่อให้มือถือโหลดไฟล์ใหม่ -->
-  <script src="app.js?v=94"></script>
-  <script src="sheet.js?v=94"></script>
-  <script src="track.js?v=94"></script>
-  <script src="measure.js?v=94"></script>
-  <script src="export-render.js?v=94"></script>
-  <script src="export.js?v=94"></script>
+  <script src="app.js?v=96"></script>
+  <script src="sheet.js?v=96"></script>
+  <script src="track.js?v=96"></script>
+  <script src="measure.js?v=96"></script>
+  <script src="export-render.js?v=96"></script>
+  <script src="export.js?v=96"></script>
 </body>
 </html>
