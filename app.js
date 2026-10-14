@@ -187,7 +187,7 @@ const OVERLAYS = [
     opacityProps: [['casing', 'line-opacity', 0.8], ['line', 'line-opacity', 1]],
   },
   {
-    id: 'stations', name: 'สถานี', url: 'data/stations.geojson', visible: true, opacity: 1,
+    id: 'stations', name: 'สถานี', url: 'data/stations.geojson', visible: false, opacity: 1,
     icon: 'circle', swatch: '#f97316', titleField: 'stn_code',
     labels: true, labelClass: 'stn-label', labelMinZoom: 7.5, labelAnchor: 'left', labelOffset: [10, 0],
     layers: (src, op) => [
