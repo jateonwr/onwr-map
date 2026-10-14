@@ -1334,6 +1334,12 @@ const FLOOD_DATE_TEXT = '9 ต.ค. 69';
 const TAMBON_URL = 'data/tambon-flood-20261009.geojson';
 const FLOOD_NEAR_KM = 20;          // ค้นหาพื้นที่ท่วมใกล้สุดในรัศมีนี้
 let floodPanelOn = false, tambonPromise = null, tambonIdx = null, floodIdx = null, fpLast = 0;
+let fpMode = 'gps', fpPoint = null;   // 'gps' = ตำแหน่งเครื่อง · 'pick' = จุดที่แตะบนแผนที่ { lng, lat }
+const fpPinEl = document.createElement('div');
+fpPinEl.className = 'fp-pin';
+fpPinEl.innerHTML = '<svg viewBox="0 0 30 40" width="30" height="40"><path d="M15 1C7.3 1 1 7.2 1 14.9 1 25.3 15 39 15 39s14-13.7 14-24.1C29 7.2 22.7 1 15 1z" fill="#7c3aed" stroke="#fff" stroke-width="2"/><circle cx="15" cy="15" r="5" fill="#fff"/></svg>';
+const fpPin = new maplibregl.Marker({ element: fpPinEl, anchor: 'bottom', draggable: true });
+fpPin.on('dragend', () => { const ll = fpPin.getLngLat(); fpPoint = { lng: ll.lng, lat: ll.lat }; renderFloodPanel(); });
 const bboxOf = f => { const [[w, s], [e, n]] = geomBounds(f); return [w, s, e, n]; };
 function loadTambons() {
   if (!tambonPromise) tambonPromise = fetch(TAMBON_URL, { cache: 'no-cache' })
@@ -1377,10 +1383,21 @@ function admLabels(p) {   // กรุงเทพฯ ใช้ แขวง/เ
   const bkk = p.pc === 'TH10';
   return { t: `${bkk ? 'แขวง' : 'ต.'}${p.t}`, a: `${bkk ? 'เขต' : 'อ.'}${p.a}`, p: bkk ? p.p : `จ.${p.p}` };
 }
-function renderFloodPanel(fix) {
+function renderFloodPanel() {
   if (!floodPanelOn) return;
+  document.querySelectorAll('[data-fpmode]').forEach(b => {
+    const on = b.dataset.fpmode === fpMode;
+    b.classList.toggle('bg-white', on); b.classList.toggle('shadow', on); b.classList.toggle('text-gray-900', on); b.classList.toggle('text-gray-500', !on);
+  });
+  const fix = fpMode === 'pick' ? fpPoint : lastFix;
   const dot = $('fpDot'), st = $('fpStatus');
-  if (!fix) { dot.className = 'w-3 h-3 rounded-full flex-none bg-gray-300 animate-pulse'; st.textContent = 'กำลังหาตำแหน่ง GPS…'; layoutBottomPanels(); return; }
+  if (!fix) {
+    dot.className = 'w-3 h-3 rounded-full flex-none bg-gray-300 animate-pulse';
+    st.textContent = fpMode === 'pick' ? 'แตะแผนที่เพื่อเลือกจุด' : 'กำลังหาตำแหน่ง GPS…';
+    $('fpPlace').textContent = ''; $('fpStats').innerHTML = '';
+    $('fpMeta').textContent = `น้ำท่วมจากดาวเทียม ${FLOOD_DATE_TEXT}`;
+    layoutBottomPanels(); return;
+  }
   const fi = floodIndex();
   if (!fi) { st.textContent = 'ข้อมูลพื้นที่น้ำท่วมยังโหลดไม่เสร็จ'; return; }
   const { lng, lat } = fix;
@@ -1403,9 +1420,13 @@ function renderFloodPanel(fix) {
     $('fpPlace').textContent = tambonIdx ? 'นอกพื้นที่ข้อมูลตำบล (เฉพาะจังหวัดที่มีน้ำท่วมและรอบ ๆ)' : 'กำลังโหลดข้อมูลตำบล…';
     $('fpStats').innerHTML = '';
   }
-  const parts = [`น้ำท่วมจากดาวเทียม ${FLOOD_DATE_TEXT}`, `GPS ±${Math.round(fix.accuracy)} ม.`];
-  if (fix.speed != null && fix.speed >= 0) parts.push(`${Math.round(fix.speed * 3.6)} กม./ชม.`);
-  if (fix.altitude != null) parts.push(`สูง ${Math.round(fix.altitude)} ม.`);
+  const parts = [`น้ำท่วมจากดาวเทียม ${FLOOD_DATE_TEXT}`];
+  if (fpMode === 'pick') parts.push(`จุดที่เลือก ${lat.toFixed(5)}, ${lng.toFixed(5)}`);
+  else {
+    parts.push(`GPS ±${Math.round(fix.accuracy)} ม.`);
+    if (fix.speed != null && fix.speed >= 0) parts.push(`${Math.round(fix.speed * 3.6)} กม./ชม.`);
+    if (fix.altitude != null) parts.push(`สูง ${Math.round(fix.altitude)} ม.`);
+  }
   $('fpMeta').textContent = parts.join(' · ');
   layoutBottomPanels();
 }
@@ -1422,22 +1443,41 @@ function setFloodPanel(on) {
   $('btnFloodInfo').classList.toggle('bg-sky-600', on); $('btnFloodInfo').classList.toggle('text-white', on);
   $('btnFloodInfo').classList.toggle('bg-white', !on); $('btnFloodInfo').classList.toggle('text-sky-700', !on);
   layoutBottomPanels();
+  showFpPin();
   if (!on) return;
-  renderFloodPanel(lastFix);
-  loadTambons().then(() => renderFloodPanel(lastFix)).catch(err => { console.error('tambon', err); toast('โหลดข้อมูลตำบลไม่สำเร็จ'); });
+  renderFloodPanel();
+  loadTambons().then(() => renderFloodPanel()).catch(err => { console.error('tambon', err); toast('โหลดข้อมูลตำบลไม่สำเร็จ'); });
 }
+function showFpPin() {   // หมุดแสดงเฉพาะตอนเปิดกล่องในโหมดเลือกจุด
+  const on = floodPanelOn && fpMode === 'pick' && fpPoint;
+  if (on) fpPin.setLngLat([fpPoint.lng, fpPoint.lat]).addTo(map); else fpPin.remove();
+}
+function setFpMode(mode) {
+  fpMode = mode;
+  if (mode === 'pick') setFollow('off');   // หยุดตามตำแหน่ง ไม่ให้แผนที่เลื่อนหนีตอนแตะเลือกจุด
+  else if (watchId == null && startTracking()) { setFollow('follow'); enableOrientation(); }
+  showFpPin(); renderFloodPanel();
+}
+document.querySelectorAll('[data-fpmode]').forEach(b => b.onclick = () => { if (fpMode !== b.dataset.fpmode) setFpMode(b.dataset.fpmode); });
+/* โหมดเลือกจุด: แตะแผนที่ = ย้ายจุด (ไม่เปิดข้อมูลชั้นข้อมูล) */
+clickInterceptors.push(e => {
+  if (!floodPanelOn || fpMode !== 'pick') return false;
+  fpPoint = { lng: e.lngLat.lng, lat: e.lngLat.lat };
+  showFpPin(); renderFloodPanel();
+  return true;
+});
 $('btnFloodInfo').onclick = () => {
   if (floodPanelOn) { setFloodPanel(false); return; }
-  if (watchId == null && startTracking()) { setFollow('follow'); enableOrientation(); }   // เปิดกล่อง = เริ่มติดตามตำแหน่งด้วย
+  if (fpMode === 'gps' && watchId == null && startTracking()) { setFollow('follow'); enableOrientation(); }   // เปิดกล่อง = เริ่มติดตามตำแหน่งด้วย
   setFloodPanel(true);
 };
 $('fpClose').onclick = () => setFloodPanel(false);
-fixListeners.push(fix => {   // อัปเดตไม่เกินวินาทีละครั้ง
-  if (!floodPanelOn) return;
+fixListeners.push(() => {   // อัปเดตไม่เกินวินาทีละครั้ง (เฉพาะโหมด GPS)
+  if (!floodPanelOn || fpMode !== 'gps') return;
   const now = Date.now();
   if (now - fpLast < 1000) return;
   fpLast = now;
-  renderFloodPanel(fix);
+  renderFloodPanel();
 });
 
 /* ============================================================ */

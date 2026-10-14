@@ -91,6 +91,7 @@
                    2px 2px 0 #fff, 0 2px 0 #fff, -2px 2px 0 #fff, -2px 0 0 #fff;
     }
     .basin-label .c, .basin-label .v { display: none; }
+    .fp-pin { width: 30px; height: 40px; cursor: grab; filter: drop-shadow(0 2px 2px rgba(0,0,0,.35)); }
     #map .basin-label, #map .prov-label { pointer-events: auto; cursor: pointer; }
     .tung-label .c { font-size: calc(13px * var(--ls, 1)); font-weight: 600; margin-top: 1px; }
     .tung-label .c:empty, .water-label .c:empty, .stn-label .c:empty { display: none; }
@@ -281,7 +282,13 @@
     </div>
     <div id="fpPlace" class="mt-1 text-[14px] leading-snug text-gray-800"></div>
     <div id="fpStats" class="mt-2 grid grid-cols-3 gap-1.5 text-center"></div>
-    <div id="fpMeta" class="mt-1.5 text-[11px] leading-tight text-gray-500 tabular-nums"></div>
+    <div class="mt-1.5 flex items-center gap-2">
+      <div id="fpMeta" class="flex-1 min-w-0 text-[11px] leading-tight text-gray-500 tabular-nums"></div>
+      <div class="flex-none flex rounded-full bg-gray-100 p-0.5" role="group" aria-label="ตำแหน่งที่ใช้">
+        <button data-fpmode="gps" class="h-7 px-2.5 rounded-full text-xs font-semibold">GPS</button>
+        <button data-fpmode="pick" class="h-7 px-2.5 rounded-full text-xs font-semibold">เลือกจุด</button>
+      </div>
+    </div>
   </div>
 
   <!-- แผงชั้นข้อมูล -->
@@ -411,11 +418,11 @@
   <div id="toast" class="fixed left-1/2 -translate-x-1/2 safe-bottom mb-24 z-40 bg-gray-900 text-white text-sm rounded-lg px-4 py-2.5 shadow-lg hidden max-w-[90vw] text-center"></div>
 
   <!-- เปลี่ยนเลข ?v= ทุกครั้งที่แก้ไฟล์ .js เพื่อให้มือถือโหลดไฟล์ใหม่ -->
-  <script src="app.js?v=76"></script>
-  <script src="sheet.js?v=76"></script>
-  <script src="track.js?v=76"></script>
-  <script src="measure.js?v=76"></script>
-  <script src="export-render.js?v=76"></script>
-  <script src="export.js?v=76"></script>
+  <script src="app.js?v=78"></script>
+  <script src="sheet.js?v=78"></script>
+  <script src="track.js?v=78"></script>
+  <script src="measure.js?v=78"></script>
+  <script src="export-render.js?v=78"></script>
+  <script src="export.js?v=78"></script>
 </body>
 </html>
