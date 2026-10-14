@@ -1394,13 +1394,14 @@ function renderFloodPanel() {
   if (!fix) {
     dot.className = 'w-3 h-3 rounded-full flex-none bg-gray-300 animate-pulse';
     st.textContent = fpMode === 'pick' ? 'แตะแผนที่เพื่อเลือกจุด' : 'กำลังหาตำแหน่ง GPS…';
-    $('fpPlace').textContent = ''; $('fpStats').innerHTML = '';
+    $('fpPlace').textContent = ''; $('fpCoord').textContent = ''; $('fpStats').innerHTML = '';
     $('fpMeta').textContent = FLOOD_SOURCE_TEXT;
     layoutBottomPanels(); return;
   }
   const fi = floodIndex();
   if (!fi) { st.textContent = 'ข้อมูลพื้นที่น้ำท่วมยังโหลดไม่เสร็จ'; return; }
   const { lng, lat } = fix;
+  $('fpCoord').textContent = `${lat.toFixed(5)}, ${lng.toFixed(5)}`;
   const hit = fi.list.find(({ f, b }) => inBox(lng, lat, b) && inGeometry(lng, lat, f.geometry));
   if (hit) {
     dot.className = 'w-3 h-3 rounded-full flex-none bg-red-600 ring-4 ring-red-100';
@@ -1465,6 +1466,66 @@ clickInterceptors.push(e => {
   showFpPin(); renderFloodPanel();
   return true;
 });
+/* ---------- สรุปข้อมูลพื้นที่น้ำท่วม (GISTDA) — modal กลางจอ ----------
+   ข้อมูลจาก S1D_20261009_1828.xlsx (ชีต Original รายตำบล รวมเป็นรายจังหวัด/อำเภอ) */
+const FLOOD_SUMMARY_URL = 'data/flood-summary-20261009.json';
+let floodSummaryPromise = null;
+const FS_COLS = [['flood', 'น้ำท่วม (ไร่)'], ['rice', 'นาข้าว (ไร่)'], ['pop', 'ประชาชน (คน)'], ['house', 'หลังคาเรือน'], ['road', 'ถนน (กม.)']];
+const fsNum = (v, k) => !v ? '–' : v.toLocaleString('th-TH', { maximumFractionDigits: k === 'road' ? 1 : 0 });
+function renderFloodSummary(d) {
+  const t = d.totals;
+  $('fsSub').textContent = `GISTDA · ${d.date} · ${t.provinces} จังหวัด ${t.amphoes} อำเภอ ${t.tambons.toLocaleString('th-TH')} ตำบล`;
+  const tile = (label, v, unit, k, hl) => `<div class="rounded-xl ${hl ? 'bg-red-50 text-red-800' : 'bg-gray-50 text-gray-800'} px-3 py-2">
+      <div class="text-[11px] text-gray-500 leading-tight">${label}</div>
+      <div class="text-lg font-semibold leading-tight tabular-nums">${k === 'hosp' ? (v || 0).toLocaleString('th-TH') : fsNum(v, k)} <span class="text-xs font-normal text-gray-500">${unit}</span></div></div>`;
+  const tiles = `<div class="grid grid-cols-2 sm:grid-cols-3 gap-2 pt-3">
+      ${tile('พื้นที่น้ำท่วมขัง', t.flood, 'ไร่', 'flood', true)}${tile('น้ำท่วมขังในนาข้าว', t.rice, 'ไร่', 'rice')}
+      ${tile('ประชาชน', t.pop, 'คน', 'pop')}${tile('หลังคาเรือน', t.house, 'หลัง', 'house')}
+      ${tile('ถนน', t.road, 'กม.', 'road')}${tile('โรงพยาบาล / โรงเรียน', (t.hosp || 0) + (t.school || 0), 'แห่ง', 'hosp')}</div>`;
+  const cells = (r, cls) => FS_COLS.map(([k]) => `<td class="px-2 py-1.5 text-right tabular-nums whitespace-nowrap ${cls}">${fsNum(r[k], k)}</td>`).join('');
+  const rows = d.provinces.map((p, i) => `
+      <tr data-fsprov="${i}" class="border-t border-gray-100 cursor-pointer active:bg-gray-50">
+        <td class="sticky left-0 bg-white px-2 py-1.5 font-medium whitespace-nowrap">
+          <svg class="inline w-4 h-4 -ml-1 text-gray-400 transition-transform" data-chev viewBox="0 0 24 24" fill="currentColor"><path d="M10 6 8.6 7.4 13.2 12l-4.6 4.6L10 18l6-6z"/></svg>${escapeHtml(p.n)}</td>
+        ${cells(p, 'font-semibold')}</tr>
+      ${p.amphoes.map(a => `<tr data-fsamp="${i}" class="hidden bg-gray-50/70 text-gray-700">
+        <td class="sticky left-0 bg-gray-50 pl-7 pr-2 py-1 whitespace-nowrap text-[13px]">${escapeHtml(a.n)}</td>${cells(a, 'text-[13px]')}</tr>`).join('')}`).join('');
+  const head = FS_COLS.map(([, n]) => `<th class="px-2 py-1.5 text-right font-medium whitespace-nowrap">${n}</th>`).join('');
+  $('fsBody').innerHTML = `${tiles}
+    <div class="mt-3 text-xs text-gray-500">รายจังหวัด (แตะเพื่อดูรายอำเภอ)</div>
+    <div class="mt-1 overflow-x-auto rounded-xl border border-gray-200">
+      <table class="w-full text-sm">
+        <thead class="bg-gray-50 text-[12px] text-gray-600"><tr><th class="sticky left-0 bg-gray-50 px-2 py-1.5 text-left font-medium">จังหวัด / อำเภอ</th>${head}</tr></thead>
+        <tbody>${rows}</tbody>
+        <tfoot class="border-t-2 border-gray-200 bg-gray-50 font-semibold"><tr><td class="sticky left-0 bg-gray-50 px-2 py-1.5">รวมทั้งหมด</td>${cells(t, '')}</tr></tfoot>
+      </table>
+    </div>`;
+}
+$('fsBody').addEventListener('click', e => {
+  const tr = e.target.closest('[data-fsprov]');
+  if (!tr) return;
+  const i = tr.dataset.fsprov, rows = $('fsBody').querySelectorAll(`[data-fsamp="${i}"]`);
+  const open = rows[0] && rows[0].classList.contains('hidden');
+  rows.forEach(r => r.classList.toggle('hidden', !open));
+  tr.querySelector('[data-chev]').classList.toggle('rotate-90', open);
+});
+function setFloodSummary(open) {
+  $('floodSummary').classList.toggle('hidden', !open);
+  $('floodSummary').classList.toggle('grid', open);
+  if (!open) return;
+  if (!floodSummaryPromise) {
+    $('fsBody').innerHTML = '<p class="py-8 text-center text-sm text-gray-500">กำลังโหลด…</p>';
+    floodSummaryPromise = fetch(FLOOD_SUMMARY_URL, { cache: 'no-cache' })
+      .then(r => { if (!r.ok) throw new Error(r.status); return r.json(); })
+      .then(d => { renderFloodSummary(d); return d; })
+      .catch(err => { floodSummaryPromise = null; console.error('flood summary', err); $('fsBody').innerHTML = '<p class="py-8 text-center text-sm text-red-600">โหลดข้อมูลสรุปไม่สำเร็จ</p>'; });
+  }
+}
+$('fpInfo').onclick = () => setFloodSummary(true);
+$('fsClose').onclick = () => setFloodSummary(false);
+$('floodSummary').addEventListener('click', e => { if (e.target === $('floodSummary')) setFloodSummary(false); });
+document.addEventListener('keydown', e => { if (e.key === 'Escape' && !$('floodSummary').classList.contains('hidden')) setFloodSummary(false); });
+
 $('btnFloodInfo').onclick = () => {
   if (floodPanelOn) { setFloodPanel(false); return; }
   if (fpMode === 'gps' && watchId == null && startTracking()) { setFollow('follow'); enableOrientation(); }   // เปิดกล่อง = เริ่มติดตามตำแหน่งด้วย

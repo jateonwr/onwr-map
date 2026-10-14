@@ -282,9 +282,17 @@
         <button data-fpmode="pick" class="h-7 px-2.5 rounded-full text-xs font-semibold">เลือกจุด</button>
       </div>
     </div>
-    <div id="fpPlace" class="mt-1 text-[14px] leading-snug text-gray-800"></div>
+    <div class="mt-1 flex items-baseline gap-2">
+      <div id="fpPlace" class="flex-1 min-w-0 text-[14px] leading-snug text-gray-800"></div>
+      <div id="fpCoord" class="flex-none text-[11px] text-gray-500 tabular-nums"></div>
+    </div>
     <div id="fpStats" class="mt-2 grid grid-cols-3 gap-1.5 text-center"></div>
-    <div id="fpMeta" class="mt-1.5 text-[11px] leading-tight text-gray-500 tabular-nums"></div>
+    <div class="mt-1 flex items-center gap-2">
+      <div id="fpMeta" class="flex-1 min-w-0 text-[11px] leading-tight text-gray-500"></div>
+      <button id="fpInfo" aria-label="สรุปข้อมูลพื้นที่น้ำท่วม" class="w-8 h-8 -mr-1.5 flex-none rounded-full grid place-items-center text-sky-700 active:bg-sky-50">
+        <svg class="w-5 h-5" viewBox="0 0 24 24" fill="currentColor"><path d="M11 7h2v2h-2zm0 4h2v6h-2zm1-9C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8z"/></svg>
+      </button>
+    </div>
   </div>
 
   <!-- แผงชั้นข้อมูล -->
@@ -409,16 +417,31 @@
     </div>
   </div>
 
+  <!-- สรุปข้อมูลพื้นที่น้ำท่วม (GISTDA) กลางจอ -->
+  <div id="floodSummary" class="hidden fixed inset-0 z-50 bg-black/40 place-items-center p-3" role="dialog" aria-modal="true" aria-labelledby="fsTitle">
+    <div class="w-full max-w-[600px] max-h-[88dvh] flex flex-col rounded-2xl bg-white shadow-2xl overflow-hidden">
+      <div class="flex items-start gap-2 px-4 pt-3.5 pb-2 border-b border-gray-100">
+        <div class="flex-1 min-w-0">
+          <h2 id="fsTitle" class="text-[17px] font-semibold leading-tight">สรุปข้อมูลพื้นที่น้ำท่วม</h2>
+          <p id="fsSub" class="text-xs text-gray-500 mt-0.5"></p>
+        </div>
+        <button id="fsClose" aria-label="ปิด" class="w-9 h-9 -mr-2 -mt-1 flex-none rounded-full grid place-items-center text-gray-500 active:bg-gray-100">
+          <svg class="w-5 h-5" viewBox="0 0 24 24" fill="currentColor"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg></button>
+      </div>
+      <div id="fsBody" class="overflow-y-auto px-4 pb-4"></div>
+    </div>
+  </div>
+
   <!-- เมนูเลือกพื้นที่ที่เน้น (ใช้ร่วมกันทั้งแผนที่หลักและหน้าจัดวาง) -->
   <div id="focusMenu" role="menu" class="hidden fixed z-[60] w-[min(272px,calc(100vw-16px))] flex-col rounded-2xl bg-white shadow-2xl border border-gray-200"></div>
   <div id="toast" class="fixed left-1/2 -translate-x-1/2 safe-bottom mb-24 z-40 bg-gray-900 text-white text-sm rounded-lg px-4 py-2.5 shadow-lg hidden max-w-[90vw] text-center"></div>
 
   <!-- เปลี่ยนเลข ?v= ทุกครั้งที่แก้ไฟล์ .js เพื่อให้มือถือโหลดไฟล์ใหม่ -->
-  <script src="app.js?v=81"></script>
-  <script src="sheet.js?v=81"></script>
-  <script src="track.js?v=81"></script>
-  <script src="measure.js?v=81"></script>
-  <script src="export-render.js?v=81"></script>
-  <script src="export.js?v=81"></script>
+  <script src="app.js?v=83"></script>
+  <script src="sheet.js?v=83"></script>
+  <script src="track.js?v=83"></script>
+  <script src="measure.js?v=83"></script>
+  <script src="export-render.js?v=83"></script>
+  <script src="export.js?v=83"></script>
 </body>
 </html>
