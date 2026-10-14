@@ -19,7 +19,7 @@ const FONT_TH = '"Noto Sans Thai", system-ui, sans-serif';
 // ลำดับทุ่งในตาราง/เลขหน้าชื่อ (ตามเอกสารต้นแบบ) — ทุ่งที่ไม่อยู่ในรายการต่อท้าย
 const TUNG_ORDER = ['บางระกำ', 'เชียงราก', 'ฝั่งซ้ายชัยนาทป่าสัก', 'ท่าวุ้ง', 'บางกุ่ม', 'บางกุ้ง',
   'บางบาล-บ้านแพน', 'ป่าโมก', 'ผักไห่', 'เจ้าเจ็ด', 'โครงการฯโพธิ์พระยา'];
-const LEGEND_ORDER = ['visits', 'stations', 'water-other', 'streams-main', 'streams-sub', 'water-l', 'water-m', 'flood', 'tung', 'provinces', 'amphoes', 'tambons', 'basins'];
+const LEGEND_ORDER = ['visits', 'stations', 'water-other', 'streams-main', 'streams-sub', 'canals-bkk', 'water-l', 'water-m', 'flood', 'tung', 'provinces', 'amphoes', 'tambons', 'basins'];
 const LABEL_CLASS_NAMES = {
   'tung-label': 'ชื่อทุ่งรับน้ำ', 'water-label': 'ชื่อเขื่อน / อาคารบังคับน้ำ', 'river-label': 'ชื่อแม่น้ำ',
   'stn-label': 'รหัสสถานี', 'visit-label': 'จุดลงพื้นที่', 'prov-label': 'ชื่อจังหวัด', 'basin-label': 'ชื่อลุ่มน้ำหลัก',

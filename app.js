@@ -33,6 +33,8 @@ const FIELD_LABELS = {
   Status_Now: 'ปริมาณน้ำปัจจุบัน (ล้าน ลบ.ม.)',
   // พื้นที่น้ำท่วม
   prov: 'จังหวัด', area_rai: 'พื้นที่ (ไร่)',
+  // คลอง กทม.
+  detail: 'รายละเอียด',
   // แหล่งน้ำขนาดใหญ่ / ขนาดกลาง
   name: 'ชื่อ', tambol: 'ตำบล', amphoe: 'อำเภอ', province: 'จังหวัด', storage: 'ความจุ (ล้าน ลบ.ม.)',
   agency: 'หน่วยงาน', Basin22: 'ลุ่มน้ำ', ONWR_Reg: 'สทนช. ภาค', REMARK: 'หมายเหตุ',
@@ -188,6 +190,18 @@ const OVERLAYS = [
   {
     id: 'streams-sub', name: 'ลำน้ำสาขา', url: 'data/streams-sub.geojson', visible: true, opacity: 1,
     icon: 'line', swatch: '#0ea5e9', titleField: 'str_name',
+    layers: (src, op) => [
+      { id: `${src}-line`, type: 'line', source: src, layout: { 'line-cap': 'round', 'line-join': 'round' },
+        paint: { 'line-color': '#0ea5e9', 'line-opacity': op,
+                 'line-width': ['interpolate', ['linear'], ['zoom'], 6, 1, 10, 2, 15, 4] } },
+    ],
+    opacityProps: [['line', 'line-opacity', 1]],
+  },
+  {
+    // คลอง กทม. สายหลัก 18 สาย (คลองสายหลักV3.shp เฉพาะ Type = คลองสายหลัก) · สีเดียวกับลำน้ำสาขา
+    id: 'canals-bkk', name: 'คลอง กทม. สายหลัก', url: 'data/canals-bkk.geojson', visible: true, opacity: 1,
+    icon: 'line', swatch: '#0ea5e9', titleField: 'name',
+    countText: data => `${data.features.length} สาย`,
     layers: (src, op) => [
       { id: `${src}-line`, type: 'line', source: src, layout: { 'line-cap': 'round', 'line-join': 'round' },
         paint: { 'line-color': '#0ea5e9', 'line-opacity': op,
@@ -1477,14 +1491,20 @@ function renderFloodPanel() {
    จอกว้าง: กล่องอยู่ซ้าย ปุ่มอยู่ที่เดิม แถบบันทึกเส้นทางอยู่เหนือกล่อง */
 const BOTTOM_BTN_MB = { btnFloodInfo: 0, btnLocate: 60, btnRecord: 136 };
 function layoutBottomPanels() {
-  const off = floodPanelOn ? $('floodPanel').offsetHeight + 8 : 0;
   const wide = matchMedia('(min-width: 768px)').matches;
+  // แผงข้อมูล (แตะเลเยอร์) เปิดอยู่ → กล่องน้ำท่วมเลื่อนขึ้นไปอยู่เหนือแผง ไม่ซ้อนกัน
+  const sheet = $('infoSheet'), sheetH = sheet.classList.contains('closed') ? 0 : sheet.offsetHeight;
+  const lift = floodPanelOn && sheetH ? Math.max(0, sheetH + (wide ? 12 : 0) + 8 - 16) : 0;
+  $('floodPanel').style.marginBottom = lift ? `${lift}px` : '';
+  const off = floodPanelOn ? lift + $('floodPanel').offsetHeight + 8 : 0;
   for (const [id, mb] of Object.entries(BOTTOM_BTN_MB)) $(id).style.marginBottom = off && !wide ? `${mb + off}px` : '';
   $('recBar').style.marginBottom = !off ? '' : wide ? `${off}px` : `${60 + off}px`;
 }
 window.addEventListener('resize', layoutBottomPanels);
 new ResizeObserver(layoutBottomPanels).observe($('floodPanel'));   // ความสูงกล่องเปลี่ยนตามข้อความ
 new MutationObserver(layoutBottomPanels).observe($('recBar'), { attributes: true, attributeFilter: ['class'] });
+new MutationObserver(layoutBottomPanels).observe($('infoSheet'), { attributes: true, attributeFilter: ['class'] });
+new ResizeObserver(layoutBottomPanels).observe($('infoSheet'));
 function setFloodPanel(on) {
   floodPanelOn = on;
   $('floodPanel').classList.toggle('hidden', !on);
