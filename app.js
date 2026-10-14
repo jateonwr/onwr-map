@@ -573,7 +573,7 @@ function resolveLabels() {
 
   // ปุ่ม/โลโก้/แผงบนจอ: ไม่วางป้ายไว้ใต้ปุ่ม
   const mb = map.getContainer().getBoundingClientRect();
-  const ui = [...document.querySelectorAll('#btnMeasure, #btnVisits, #btnExport, #btnFocus, #onwrLogo, #focusChip, #btnLayers, #btnCompass, #zoomBox, #btnRecord, #btnLocate, #recBar, #measurePanel, #zoneChip')]
+  const ui = [...document.querySelectorAll('#btnMeasure, #btnVisits, #btnExport, #btnFocus, #btnFloodInfo, #floodPanel, #onwrLogo, #focusChip, #btnLayers, #btnCompass, #zoomBox, #btnRecord, #btnLocate, #recBar, #measurePanel, #zoneChip')]
     .filter(el => el.offsetParent && getComputedStyle(el).visibility !== 'hidden')
     .map(el => { const b = el.getBoundingClientRect(); return { x1: b.left - mb.left - 4, y1: b.top - mb.top - 4, x2: b.right - mb.left + 4, y2: b.bottom - mb.top + 4 }; });
 
@@ -1324,6 +1324,121 @@ function updateZone(fix) {
   $('zoneSwatch').innerHTML = layerIcon(layer, 16);
   chip.classList.remove('hidden'); chip.classList.add('flex');
 }
+
+/* ============================================================
+ *  น้ำท่วม ณ ตำแหน่งปัจจุบัน (ใช้ระหว่างบินสำรวจ)
+ *  อยู่ในพื้นที่น้ำท่วมหรือไม่ / ระยะถึงพื้นที่ท่วมใกล้สุด + ต./อ./จ. + พื้นที่ท่วมของตำบล/อำเภอ/จังหวัด
+ *  ข้อมูลตำบล (เฉพาะจังหวัดที่มีน้ำท่วมและรอบ ๆ) โหลดเมื่อเปิดกล่องครั้งแรก
+ * ============================================================ */
+const FLOOD_DATE_TEXT = '9 ต.ค. 69';
+const TAMBON_URL = 'data/tambon-flood-20261009.geojson';
+const FLOOD_NEAR_KM = 20;          // ค้นหาพื้นที่ท่วมใกล้สุดในรัศมีนี้
+let floodPanelOn = false, tambonPromise = null, tambonIdx = null, floodIdx = null, fpLast = 0;
+const bboxOf = f => { const [[w, s], [e, n]] = geomBounds(f); return [w, s, e, n]; };
+function loadTambons() {
+  if (!tambonPromise) tambonPromise = fetch(TAMBON_URL, { cache: 'no-cache' })
+    .then(r => { if (!r.ok) throw new Error(r.status); return r.json(); })
+    .then(d => {
+      const amp = {}, prov = {};
+      for (const f of d.features) { const p = f.properties; amp[p.ac] = (amp[p.ac] || 0) + p.fr; prov[p.pc] = (prov[p.pc] || 0) + p.fr; }
+      tambonIdx = { list: d.features.map(f => ({ f, b: bboxOf(f) })), amp, prov };
+      return tambonIdx;
+    })
+    .catch(err => { tambonPromise = null; throw err; });
+  return tambonPromise;
+}
+function floodIndex() {
+  const d = overlayState.flood && overlayState.flood.data;
+  if (!d) return null;
+  if (!floodIdx || floodIdx.data !== d) floodIdx = { data: d, list: d.features.map(f => ({ f, b: bboxOf(f) })) };
+  return floodIdx;
+}
+const inBox = (x, y, b, pad = 0) => x >= b[0] - pad && x <= b[2] + pad && y >= b[1] - pad && y <= b[3] + pad;
+/* ระยะ (กม.) จากจุดถึงขอบพื้นที่ท่วมใกล้สุดในรัศมี FLOOD_NEAR_KM — ไม่พบ = null */
+function nearestFloodKm(lng, lat, idx) {
+  const kx = 111.32 * Math.cos(lat * Math.PI / 180), ky = 110.57, pad = FLOOD_NEAR_KM / ky;
+  let best = Infinity;
+  for (const { f, b } of idx.list) {
+    if (!inBox(lng, lat, b, pad)) continue;
+    const polys = f.geometry.type === 'Polygon' ? [f.geometry.coordinates] : f.geometry.coordinates;
+    for (const poly of polys) for (const ring of poly) for (let i = 1; i < ring.length; i++) {
+      const ax = (ring[i - 1][0] - lng) * kx, ay = (ring[i - 1][1] - lat) * ky;
+      const bx = (ring[i][0] - lng) * kx, by = (ring[i][1] - lat) * ky;
+      const dx = bx - ax, dy = by - ay, l2 = dx * dx + dy * dy;
+      const t = l2 ? Math.max(0, Math.min(1, -(ax * dx + ay * dy) / l2)) : 0;
+      const d = Math.hypot(ax + t * dx, ay + t * dy);
+      if (d < best) best = d;
+    }
+  }
+  return best <= FLOOD_NEAR_KM ? best : null;
+}
+const raiText = v => v > 0 ? `${Math.round(v).toLocaleString('th-TH')}` : '–';
+function admLabels(p) {   // กรุงเทพฯ ใช้ แขวง/เขต
+  const bkk = p.pc === 'TH10';
+  return { t: `${bkk ? 'แขวง' : 'ต.'}${p.t}`, a: `${bkk ? 'เขต' : 'อ.'}${p.a}`, p: bkk ? p.p : `จ.${p.p}` };
+}
+function renderFloodPanel(fix) {
+  if (!floodPanelOn) return;
+  const dot = $('fpDot'), st = $('fpStatus');
+  if (!fix) { dot.className = 'w-3 h-3 rounded-full flex-none bg-gray-300 animate-pulse'; st.textContent = 'กำลังหาตำแหน่ง GPS…'; layoutBottomPanels(); return; }
+  const fi = floodIndex();
+  if (!fi) { st.textContent = 'ข้อมูลพื้นที่น้ำท่วมยังโหลดไม่เสร็จ'; return; }
+  const { lng, lat } = fix;
+  const hit = fi.list.find(({ f, b }) => inBox(lng, lat, b) && inGeometry(lng, lat, f.geometry));
+  if (hit) {
+    dot.className = 'w-3 h-3 rounded-full flex-none bg-red-600 ring-4 ring-red-100';
+    st.innerHTML = `<span class="text-red-700">อยู่ในพื้นที่น้ำท่วม</span> <span class="text-sm font-normal text-gray-600">· แปลงนี้ ${raiText(hit.f.properties.area_rai)} ไร่</span>`;
+  } else {
+    const km = nearestFloodKm(lng, lat, fi);
+    dot.className = 'w-3 h-3 rounded-full flex-none bg-emerald-500';
+    st.innerHTML = `ไม่อยู่ในพื้นที่น้ำท่วม <span class="text-sm font-normal text-gray-600">· ${km == null ? `ไม่มีภายใน ${FLOOD_NEAR_KM} กม.` : `ห่าง ${km < 1 ? `${Math.round(km * 1000)} ม.` : `${km.toFixed(1)} กม.`}`}</span>`;
+  }
+  const tb = tambonIdx && tambonIdx.list.find(({ f, b }) => inBox(lng, lat, b) && inGeometry(lng, lat, f.geometry));
+  if (tb) {
+    const p = tb.f.properties, L = admLabels(p);
+    $('fpPlace').textContent = `${L.t}  ${L.a}  ${L.p}`;
+    const cell = (k, v) => `<div class="rounded-lg ${v > 0 ? 'bg-red-50 text-red-800' : 'bg-gray-50 text-gray-500'} py-1"><div class="text-[11px] leading-tight">${k}</div><div class="text-[15px] font-semibold leading-tight tabular-nums">${raiText(v)}</div></div>`;
+    $('fpStats').innerHTML = cell(p.pc === 'TH10' ? 'แขวง (ไร่)' : 'ตำบล (ไร่)', p.fr) + cell(p.pc === 'TH10' ? 'เขต (ไร่)' : 'อำเภอ (ไร่)', tambonIdx.amp[p.ac]) + cell('จังหวัด (ไร่)', tambonIdx.prov[p.pc]);
+  } else {
+    $('fpPlace').textContent = tambonIdx ? 'นอกพื้นที่ข้อมูลตำบล (เฉพาะจังหวัดที่มีน้ำท่วมและรอบ ๆ)' : 'กำลังโหลดข้อมูลตำบล…';
+    $('fpStats').innerHTML = '';
+  }
+  const parts = [`น้ำท่วมจากดาวเทียม ${FLOOD_DATE_TEXT}`, `GPS ±${Math.round(fix.accuracy)} ม.`];
+  if (fix.speed != null && fix.speed >= 0) parts.push(`${Math.round(fix.speed * 3.6)} กม./ชม.`);
+  if (fix.altitude != null) parts.push(`สูง ${Math.round(fix.altitude)} ม.`);
+  $('fpMeta').textContent = parts.join(' · ');
+  layoutBottomPanels();
+}
+/* กล่องน้ำท่วมอยู่ล่างสุด · แถบบันทึกเส้นทางขยับขึ้นไปอยู่เหนือกล่องเมื่อเปิดทั้งคู่ */
+function layoutBottomPanels() {
+  const rb = $('recBar');
+  rb.style.marginBottom = floodPanelOn ? `${$('floodPanel').offsetHeight + 8}px` : '';
+}
+new MutationObserver(layoutBottomPanels).observe($('recBar'), { attributes: true, attributeFilter: ['class'] });
+function setFloodPanel(on) {
+  floodPanelOn = on;
+  $('floodPanel').classList.toggle('hidden', !on);
+  $('btnFloodInfo').setAttribute('aria-pressed', String(on));
+  $('btnFloodInfo').classList.toggle('bg-sky-600', on); $('btnFloodInfo').classList.toggle('text-white', on);
+  $('btnFloodInfo').classList.toggle('bg-white', !on); $('btnFloodInfo').classList.toggle('text-sky-700', !on);
+  layoutBottomPanels();
+  if (!on) return;
+  renderFloodPanel(lastFix);
+  loadTambons().then(() => renderFloodPanel(lastFix)).catch(err => { console.error('tambon', err); toast('โหลดข้อมูลตำบลไม่สำเร็จ'); });
+}
+$('btnFloodInfo').onclick = () => {
+  if (floodPanelOn) { setFloodPanel(false); return; }
+  if (watchId == null && startTracking()) { setFollow('follow'); enableOrientation(); }   // เปิดกล่อง = เริ่มติดตามตำแหน่งด้วย
+  setFloodPanel(true);
+};
+$('fpClose').onclick = () => setFloodPanel(false);
+fixListeners.push(fix => {   // อัปเดตไม่เกินวินาทีละครั้ง
+  if (!floodPanelOn) return;
+  const now = Date.now();
+  if (now - fpLast < 1000) return;
+  fpLast = now;
+  renderFloodPanel(fix);
+});
 
 /* ============================================================ */
 
