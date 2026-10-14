@@ -242,6 +242,14 @@ const OVERLAYS = [
     icon: 'circle', swatch: '#f97316', titleField: 'stn_code',
     loader: () => loadStationPoints(),
     countText: data => `${data.features.length} สถานี`,
+    // บรรทัดใต้รหัส: ค่าจากคอลัมน์ "ระดับน้ำ …" ใน Sheet (หน่วยจากวงเล็บในหัวคอลัมน์) · ว่าง = ไม่แสดง
+    labelExtra: p => {
+      const k = Object.keys(p).find(h => /ระดับน้ำ|water\s*level/i.test(h));
+      if (!k || p[k] === '' || p[k] == null) return '';
+      const unit = (k.match(/\(([^)]+)\)/) || [])[1];
+      const n = toNumber(p[k]);
+      return `${n != null ? n.toLocaleString('th-TH', { maximumFractionDigits: 2 }) : p[k]}${unit ? ` ${unit}` : ''}`;
+    },
     labels: true, labelClass: 'stn-label', labelMinZoom: 7.5, labelAnchor: 'left', labelOffset: [10, 0],
     layers: (src, op) => [
       { id: `${src}-circle`, type: 'circle', source: src,
@@ -677,7 +685,7 @@ const LABEL_STYLES = {
   'tung-label':  { size: 16, weight: 600, color: '#1f2937', sub: { size: 13, weight: 600 }, halo: 3 },
   'water-label': { size: 13, weight: 700, color: '#0c4a6e', sub: { size: 12, weight: 600 }, halo: 2 },
   'river-label': { size: 14, weight: 600, color: '#1d4ed8', halo: 2 },
-  'stn-label':   { size: 13, weight: 700, color: '#9a3412', halo: 3, family: 'system-ui, sans-serif' },
+  'stn-label':   { size: 13, weight: 700, color: '#9a3412', sub: { size: 11, weight: 600 }, halo: 3, family: 'system-ui, sans-serif' },
   'visit-label': { size: 13, weight: 700, color: '#991b1b', halo: 2 },
   'prov-label':  { size: 13, weight: 600, color: '#111827', halo: 1.5, opacity: 0.85 },
   'basin-label': { size: 14, weight: 700, color: '#0f766e', halo: 2 },
