@@ -223,14 +223,13 @@ onMapReady.push(() => {
 const ICON_PAUSE = '<svg class="w-6 h-6" viewBox="0 0 24 24" fill="currentColor"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg>';
 const ICON_PLAY = '<svg class="w-6 h-6" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>';
 
-/* ปุ่มบันทึก: ยังแสดงระหว่างบันทึก (ไอคอนกระพริบ = กำลังบันทึก · เทา = พัก) · กดเพื่อซ่อน/แสดงแถบบันทึก */
+/* ปุ่มบันทึก: ยังแสดงระหว่างบันทึก (จุดแดงกระพริบ = กำลังบันทึก · จุดแดงนิ่ง = พัก) · กดเพื่อซ่อน/แสดงแถบบันทึก */
 let recBarCollapsed = false;
 function updateRecUI() {
   const on = !!rec, barOn = on && !recBarCollapsed;
   $('recBar').classList.toggle('hidden', !barOn);
   $('recBar').classList.toggle('flex', barOn);
-  $('recIcon').className = `relative w-4 h-4 rounded-full ${!on ? 'bg-red-600 ring-4 ring-red-100'
-    : rec.paused ? 'bg-gray-400 ring-4 ring-gray-200' : 'bg-red-600 ring-4 ring-red-200 animate-pulse'}`;
+  $('recIcon').className = `relative w-4 h-4 rounded-full bg-red-600 ring-4 ${!on ? 'ring-red-100' : rec.paused ? 'ring-red-100' : 'ring-red-200 animate-pulse'}`;   // จุดแดงเสมอ: กระพริบ = กำลังบันทึก · นิ่ง = พัก
   $('recIcon').innerHTML = on && !rec.paused ? '<span class="absolute inset-0 rounded-full bg-red-500 animate-ping"></span>' : '';
   $('btnRecord').setAttribute('aria-label', !on ? 'บันทึกเส้นทาง' : barOn ? 'ซ่อนแถบบันทึก' : 'แสดงแถบบันทึก (กำลังบันทึก)');
   clearInterval(recTimer);
