@@ -1650,33 +1650,33 @@ function renderFloodPanel() {
    จอกว้าง: กล่องอยู่ซ้าย ปุ่มอยู่ที่เดิม แถบบันทึกเส้นทางอยู่เหนือกล่อง */
 const BOTTOM_BTN_MB = { btnFloodInfo: 0, btnLocate: 60, btnRecord: 128 };
 function layoutBottomPanels() {
+  // ซ้อนจากล่างขึ้นบน (ไม่ทับกัน): แผงข้อมูลเลเยอร์ → แถบบันทึกเส้นทาง → กล่องน้ำท่วม → ปุ่มขวาล่าง (มือถือ)
+  // มือถือ: แถบบันทึก/กล่องน้ำท่วมกว้างเต็มจอ · จอกว้าง: อยู่คอลัมน์ซ้าย ปุ่มขวาอยู่ที่เดิม
   const wide = matchMedia('(min-width: 768px)').matches;
-  // แผงข้อมูล (แตะเลเยอร์) เปิดอยู่ → กล่องน้ำท่วมเลื่อนขึ้นไปอยู่เหนือแผง ไม่ซ้อนกัน
   const sheet = $('infoSheet'), sheetH = sheet.classList.contains('closed') ? 0 : sheet.offsetHeight;
-  let lift = floodPanelOn && sheetH ? Math.max(0, sheetH + (wide ? 12 : 0) + 8 - 16) : 0;
-  if (lift && 16 + lift + $('floodPanel').offsetHeight > innerHeight - ($('zoomBox').getBoundingClientRect().bottom + 8)) lift = 0;
-  const covered = floodPanelOn && sheetH && !lift;   // แผงข้อมูลขยายสูง: กล่องน้ำท่วมอยู่ใต้แผงชั่วคราว
-  $('floodPanel').style.marginBottom = lift ? `${lift}px` : '';
-  // ปุ่มขวาล่าง/แถบบันทึก: เลื่อนขึ้นเหนือกล่องน้ำท่วม (มือถือ)
-  // แผงข้อมูลเปิดด้วย (ที่เหลือน้อย) → เรียง 3 ปุ่มเป็นแถวแนวนอนเหนือกล่อง ไม่ชนปุ่มซูม
-  const off = floodPanelOn && !covered ? lift + $('floodPanel').offsetHeight + 8 : 0;
-  const row = !wide && off && sheetH;
-  const ROW = { btnFloodInfo: [16, 0], btnLocate: [72, -4], btnRecord: [136, 0] };   // [ระยะจากขวา, ปรับให้กึ่งกลางตรงกัน]
+  const rb = $('recBar'), recOn = !rb.classList.contains('hidden'), recH = recOn ? rb.offsetHeight : 0;
+  const fp = $('floodPanel'), fpH = floodPanelOn ? fp.offsetHeight : 0;
   const limit = $('zoomBox').getBoundingClientRect().bottom + 8;
+  const need = (recOn ? recH + 8 : 0) + (floodPanelOn ? fpH + 8 : 0);
+  let y = sheetH ? sheetH + (wide ? 12 : 0) + 8 - 16 : 0;
+  if (sheetH && 16 + y + need > innerHeight - limit) y = 0;   // แผงข้อมูลขยายสูงมาก → ปล่อยให้แผงทับไว้ชั่วคราว
+  rb.style.marginBottom = recOn ? `${y}px` : '';
+  if (recOn) y += recH + 8;
+  fp.style.marginBottom = floodPanelOn ? `${y}px` : '';
+  if (floodPanelOn) y += fpH + 8;
+
+  // ปุ่มขวาล่าง (มือถือ): เหนือทุกอย่างข้างบน · ซ้อนแนวตั้งไม่พอ (ชนปุ่มซูม) → เรียงแถวแนวนอน · ยังไม่พอ → ซ่อนปุ่มที่ชน
+  const off = wide ? 0 : y;
+  const ROW = { btnFloodInfo: [16, 0], btnLocate: [72, -4], btnRecord: [136, 0] };   // [ระยะจากขวา, ปรับให้กึ่งกลางตรงกัน]
+  const stackTop = innerHeight - 16 - (BOTTOM_BTN_MB.btnRecord + off) - $('btnRecord').offsetHeight;
+  const row = !wide && off > 0 && stackTop < limit;
   for (const [id, mb] of Object.entries(BOTTOM_BTN_MB)) {
-    const el = $(id), m = !off || wide ? mb : row ? off + ROW[id][1] : mb + off;
-    el.style.marginBottom = off && !wide ? `${m}px` : '';
+    const el = $(id), m = wide || !off ? mb : row ? off + ROW[id][1] : mb + off;
+    el.style.marginBottom = !wide && off ? `${m}px` : '';
     el.style.right = row ? `${ROW[id][0]}px` : '';
     const top = innerHeight - parseFloat(getComputedStyle(el).bottom) - m - el.offsetHeight;
-    el.style.visibility = !wide && top < limit ? 'hidden' : '';   // จอเตี้ยมาก (เช่น มือถือแนวนอน)
+    el.style.visibility = !wide && top < limit ? 'hidden' : '';
   }
-  // แถบบันทึกเส้นทาง: อยู่เหนือกล่องน้ำท่วม และเหนือแผงข้อมูลเลเยอร์ (ไม่ทับกัน) · แผงข้อมูลขยายสูงมาก → ปล่อยให้แผงทับ
-  let recMb = !off ? 0 : wide ? off : 60 + off;
-  if (sheetH && !covered && sheetH < innerHeight * 0.55) {
-    const aboveSheet = floodPanelOn && lift ? lift + $('floodPanel').offsetHeight + 8 : sheetH + (wide ? 12 : 0) + 8 - 16;
-    recMb = Math.max(recMb, aboveSheet);
-  }
-  $('recBar').style.marginBottom = recMb ? `${recMb}px` : '';
 }
 window.addEventListener('resize', layoutBottomPanels);
 new ResizeObserver(layoutBottomPanels).observe($('floodPanel'));   // ความสูงกล่องเปลี่ยนตามข้อความ
