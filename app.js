@@ -78,7 +78,7 @@ const OVERLAYS = [
   },
   {
     // พื้นที่น้ำท่วมจากภาพดาวเทียม Sentinel-1 (S1D_20261009_1828.kmz) · สีแดงตามไฟล์ต้นฉบับ
-    id: 'flood', name: 'พื้นที่น้ำท่วม (9 ต.ค. 69)', url: 'data/flood-20261009.geojson', visible: true, opacity: 0.6,
+    id: 'flood', name: 'พื้นที่น้ำท่วม (9 ต.ค. 69)', url: 'data/flood-20261009.geojson', visible: true, opacity: 0.3,
     icon: 'area', swatch: '#ef4444', outline: '#991b1b', titleField: 'prov',
     countText: data => `${data.features.length.toLocaleString('th-TH')} แปลง · ${Math.round(data.features.reduce((s, f) => s + (f.properties.area_rai || 0), 0)).toLocaleString('th-TH')} ไร่`,
     layers: (src, op) => [
