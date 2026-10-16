@@ -839,11 +839,11 @@ function renderLayerPanel() {
       </div>` : '';
     return `
       <div class="rounded-2xl border border-gray-200 p-4 ${failed ? 'opacity-50' : ''}">
-        <div class="flex items-center gap-3">
+        <div class="flex items-center gap-2">
           <span class="w-9 h-9 rounded-lg flex-none bg-gray-100 grid place-items-center">${layerIcon(o, 26)}</span>
           <div class="flex-1 min-w-0">
-            ${o.dates ? `<div class="font-medium flex items-center gap-2 flex-wrap">พื้นที่น้ำท่วม
-              <select data-flood-date aria-label="วันที่ข้อมูลน้ำท่วม" class="h-8 rounded-lg border border-gray-300 bg-white pl-2 pr-1 text-sm font-normal">
+            ${o.dates ? `<div class="font-medium flex items-center gap-1 whitespace-nowrap"><span class="text-[13.5px] leading-tight tracking-tight">พื้นที่น้ำท่วม</span>
+              <select data-flood-date aria-label="วันที่ข้อมูลน้ำท่วม" class="flex-none h-6 appearance-none rounded-md border border-gray-300 bg-white bg-no-repeat pl-1 pr-3.5 text-[12px] font-normal" style="background-image:url('data:image/svg+xml;utf8,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22 fill=%22%236b7280%22><path d=%22M7.4 8.6 12 13.2l4.6-4.6L18 10l-6 6-6-6z%22/></svg>');background-size:14px;background-position:right 1px center">
                 ${FLOOD_DATES.map(d => `<option value="${d.key}" ${d.key === floodDate.key ? 'selected' : ''}>${d.label}</option>`).join('')}
               </select></div>` : `<div class="font-medium">${o.name}</div>`}
             <div class="text-xs text-gray-500">${failed ? 'โหลดไม่สำเร็จ' : o.countText ? o.countText(st.data) : `${st.data.features.length} รายการ`}${o.lazy && !st.data ? ' · โหลดเมื่อเปิด' : ''}</div>
