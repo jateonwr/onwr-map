@@ -92,6 +92,11 @@
                    2px 2px 0 #fff, 0 2px 0 #fff, -2px 2px 0 #fff, -2px 0 0 #fff;
     }
     .basin-label .c, .basin-label .v { display: none; }
+    .photo-cur { width: 40px; height: 40px; border-radius: 50%; border: 3px solid #f59e0b; box-shadow: 0 0 0 2px #fff, 0 0 12px rgba(245,158,11,.8); pointer-events: none; }
+    .photo-cur::after { content: ""; position: absolute; inset: -3px; border-radius: 50%; border: 3px solid #f59e0b; animation: photoPulse 1.6s ease-out infinite; }
+    @keyframes photoPulse { from { transform: scale(1); opacity: .9; } to { transform: scale(1.8); opacity: 0; } }
+    [data-hscroll] { scrollbar-width: none; -webkit-overflow-scrolling: touch; }
+    [data-hscroll]::-webkit-scrollbar { display: none; }
     .fp-pin { width: 30px; height: 40px; cursor: grab; filter: drop-shadow(0 2px 2px rgba(0,0,0,.35)); }
     #map .basin-label, #map .prov-label { pointer-events: auto; cursor: pointer; }
     .tung-label .c { font-size: calc(13px * var(--ls, 1)); font-weight: 600; margin-top: 1px; }
@@ -488,12 +493,12 @@
   <div id="toast" class="fixed left-1/2 -translate-x-1/2 safe-bottom mb-24 z-40 bg-gray-900 text-white text-sm rounded-lg px-4 py-2.5 shadow-lg hidden max-w-[90vw] text-center"></div>
 
   <!-- เปลี่ยนเลข ?v= ทุกครั้งที่แก้ไฟล์ .js เพื่อให้มือถือโหลดไฟล์ใหม่ -->
-  <script src="app.js?v=116"></script>
-  <script src="sheet.js?v=116"></script>
-  <script src="track.js?v=116"></script>
-  <script src="measure.js?v=116"></script>
-  <script src="export-render.js?v=116"></script>
-  <script src="export.js?v=116"></script>
-  <script src="photos.js?v=116"></script>
+  <script src="app.js?v=117"></script>
+  <script src="sheet.js?v=117"></script>
+  <script src="track.js?v=117"></script>
+  <script src="measure.js?v=117"></script>
+  <script src="export-render.js?v=117"></script>
+  <script src="export.js?v=117"></script>
+  <script src="photos.js?v=117"></script>
 </body>
 </html>

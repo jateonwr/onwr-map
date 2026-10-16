@@ -298,7 +298,7 @@ const OVERLAYS = [
     id: 'photos', name: 'รูปถ่ายพื้นที่', url: 'data/photos-20261014.geojson', visible: true, opacity: 1,
     icon: 'camera', swatch: '#0e7490', titleField: 'name',
     enrich: data => markPhotoStacks(data),
-    onFeatureClick: f => openPhotoViewer(f),
+    onFeatureClick: f => openPhotoSheet(f),
     countText: data => `${data.features.length} รูป · บินสำรวจ 14 ต.ค. 69`,
     layers: (src, op) => [
       { id: `${src}-icon`, type: 'symbol', source: src, filter: ['==', ['get', 'top'], true],
@@ -1234,6 +1234,7 @@ function closeSheet(id) {
   if (SIDE_SHEETS.includes(id) && SIDE_SHEETS.every(x => $(x).classList.contains('closed'))) $('backdrop').classList.add('hidden');
   if (id === 'infoSheet') {
     selectedInfo = null; map.getSource('selected')?.setData(emptyFC());
+    if (typeof photoSheetReset === 'function') photoSheetReset();
   }
   setTimeout(() => { if ($(id).classList.contains('closed')) $(id).style.maxHeight = ''; }, 300);   // ปิดแล้วกลับขนาดเริ่มต้น
 }
@@ -1249,6 +1250,7 @@ for (const id of ['layerSheet', 'infoSheet', 'tracksSheet']) {
   let y0 = null, dy = 0, h0 = 0, t0 = 0, lastY = 0, lastT = 0, v = 0;
   el.addEventListener('touchstart', e => {
     if (matchMedia('(min-width: 768px)').matches) return;
+    if (e.target.closest('[data-hscroll]')) return;   // แถบเลื่อนแนวนอน (รูปถ่าย) = ปัดรูป ไม่ใช่ลากแผง
     const scroller = e.target.closest('.overflow-y-auto');
     if (scroller && scroller.scrollHeight > scroller.clientHeight + 1) return;
     y0 = lastY = e.touches[0].clientY; dy = 0; v = 0; h0 = el.offsetHeight; t0 = lastT = performance.now();
@@ -1291,7 +1293,7 @@ map.on('click', e => {
   hits.sort((a, b) => (special(b) - special(a)) || ((a.layer.type === 'fill') - (b.layer.type === 'fill')));
   const f = hits[0];
   const o = OVERLAYS.find(x => x.id === f.source);
-  if (o.onFeatureClick) { closeSheet('infoSheet'); o.onFeatureClick(overlayState[o.id].data.features[f.id]); return; }
+  if (o.onFeatureClick) { o.onFeatureClick(overlayState[o.id].data.features[f.id]); return; }
   showInfo(o, overlayState[o.id].data.features[f.id]);
 });
 
@@ -1308,6 +1310,7 @@ let selectedInfo = null;   // { o, f } ที่แสดงในแผงข�
 const displayName = (o, p) => p.display_name || p[o.titleField];
 
 function showInfo(o, f) {
+  if (typeof photoSheetReset === 'function') photoSheetReset();   // ออกจากโหมดรูปถ่าย (photos.js)
   selectedInfo = { o, f };
   const p = f.properties;
   $('infoTitle').textContent = displayName(o, p) || '(ไม่มีชื่อ)';

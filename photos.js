@@ -59,7 +59,87 @@ function markPhotoStacks(data) {
   });
 }
 
-/* ---------- หน้าต่างดูรูป ---------- */
+/* ---------- แผงรูปถ่าย (เลื่อนขึ้นจากขอบล่าง ใช้แผงข้อมูลเลเยอร์) ----------
+   ปัดรูปซ้าย/ขวา → แผนที่เลื่อนไปจุดของรูปนั้น + วงไฮไลต์ · แตะรูป = ดูเต็มจอ */
+const PHOTO_SHEET_H = '54dvh';
+const curEl = document.createElement('div'); curEl.className = 'photo-cur';
+const curMarker = new maplibregl.Marker({ element: curEl, anchor: 'center' });
+let photoSheetOn = false, phScrollRaf = 0;
+function photoList() {
+  const data = overlayState.photos && overlayState.photos.data;
+  return data ? [...data.features].sort((a, b) => a.properties.time.localeCompare(b.properties.time)) : [];
+}
+function photoMeta(i) {
+  const f = pv.list[i], p = f.properties, [lng, lat] = f.geometry.coordinates;
+  const parts = [`${i + 1}/${pv.list.length}`];
+  if (p.alt != null) parts.push(`สูง ${p.alt.toLocaleString('th-TH')} ม.`);
+  if (p.dir != null) parts.push(`หัน${DIRS[Math.round(p.dir / 45) % 8]}`);
+  parts.push(`${lat.toFixed(5)}, ${lng.toFixed(5)}`);
+  return parts.join(' · ');
+}
+function openPhotoSheet(f) {
+  pv.list = photoList();
+  if (!pv.list.length) return;
+  const o = OVERLAYS.find(x => x.id === 'photos');
+  showInfo(o, f);   // ใช้แผงเดิม (ตำแหน่ง/ลาก/ซ้อนกับกล่องอื่น) แล้วแทนเนื้อหาด้วยแถบรูป
+  photoSheetOn = true;
+  $('infoSheet').style.maxHeight = PHOTO_SHEET_H;
+  const slide = (p, i) => `<button data-ph="${i}" class="snap-center flex-none w-[86%] rounded-xl overflow-hidden bg-gray-100 relative active:opacity-90" aria-label="ดูรูปเต็มจอ">
+      <img src="${p.properties.thumb}" data-src="${p.properties.img}" alt="" class="w-full h-[min(36dvh,260px)] object-cover">
+      <span class="absolute right-2 bottom-2 w-8 h-8 rounded-full bg-black/45 text-white grid place-items-center">
+        <svg class="w-4 h-4" viewBox="0 0 24 24" fill="currentColor"><path d="M7 14H5v5h5v-2H7v-3zm-2-4h2V7h3V5H5v5zm12 7h-3v2h5v-5h-2v3zM14 5v2h3v3h2V5h-5z"/></svg></span>
+    </button>`;
+  $('infoBody').innerHTML = `<div id="phCarousel" data-hscroll class="flex overflow-x-auto snap-x snap-mandatory gap-2.5 -mx-5 px-5 pt-1 pb-3">${pv.list.map(slide).join('')}</div>`;
+  const car = $('phCarousel');
+  car.addEventListener('scroll', () => {
+    if (phScrollRaf) return;
+    phScrollRaf = requestAnimationFrame(() => { phScrollRaf = 0; const i = carouselIndex(); if (i !== pv.i) syncPhoto(i); });
+  }, { passive: true });
+  car.addEventListener('click', e => {
+    const b = e.target.closest('[data-ph]');
+    if (!b) return;
+    if (+b.dataset.ph !== pv.i) scrollToPhoto(+b.dataset.ph); else openPhotoViewer(pv.list[pv.i]);
+  });
+  setFollow('off');
+  pv.i = -1;
+  const i0 = Math.max(0, pv.list.indexOf(f));
+  requestAnimationFrame(() => { scrollToPhoto(i0, false); syncPhoto(i0); });
+}
+function carouselIndex() {
+  const car = $('phCarousel'), first = car && car.firstElementChild;
+  if (!first) return 0;
+  const step = first.offsetWidth + 10;
+  return Math.max(0, Math.min(pv.list.length - 1, Math.round(car.scrollLeft / step)));
+}
+function scrollToPhoto(i, smooth = true) {
+  const car = $('phCarousel'), el = car && car.children[i];
+  if (el) car.scrollTo({ left: el.offsetLeft - car.firstElementChild.offsetLeft, behavior: smooth ? 'smooth' : 'auto' });
+}
+/* รูปที่ i: ข้อความหัวแผง + โหลดรูปละเอียด + วงไฮไลต์บนแผนที่ + เลื่อนแผนที่ให้จุดอยู่เหนือแผง */
+function syncPhoto(i) {
+  pv.i = i;
+  const f = pv.list[i], p = f.properties;
+  $('infoTitle').textContent = fmtPhotoTime(p.time);
+  $('infoLayer').textContent = photoMeta(i);
+  const img = $('phCarousel').children[i].querySelector('img');
+  if (img.dataset.src) { const hi = new Image(); hi.onload = () => { img.src = hi.src; }; hi.src = img.dataset.src; delete img.dataset.src; }
+  curMarker.setLngLat(f.geometry.coordinates).addTo(map);
+  const sheetH = $('infoSheet').offsetHeight, wide = matchMedia('(min-width: 768px)').matches;
+  map.easeTo({ center: f.geometry.coordinates, offset: wide ? [210, 0] : [0, -sheetH / 2], zoom: Math.max(map.getZoom(), 11), duration: 600 });
+}
+function photoSheetReset() {
+  if (!photoSheetOn) return;
+  photoSheetOn = false;
+  curMarker.remove();
+  $('infoSheet').style.maxHeight = '';
+}
+document.addEventListener('keydown', e => {
+  if (!photoSheetOn || !$('photoViewer').classList.contains('hidden')) return;
+  if (e.key === 'ArrowRight') scrollToPhoto(Math.min(pv.list.length - 1, pv.i + 1));
+  else if (e.key === 'ArrowLeft') scrollToPhoto(Math.max(0, pv.i - 1));
+});
+
+/* ---------- หน้าต่างดูรูปเต็มจอ (แตะรูปในแผง) ---------- */
 const pv = { list: [], i: 0 };
 const fmtPhotoTime = s => new Date(s).toLocaleString('th-TH', { day: 'numeric', month: 'short', year: '2-digit', hour: '2-digit', minute: '2-digit' }) + ' น.';
 const DIRS = ['เหนือ', 'ตะวันออกเฉียงเหนือ', 'ตะวันออก', 'ตะวันออกเฉียงใต้', 'ใต้', 'ตะวันตกเฉียงใต้', 'ตะวันตก', 'ตะวันตกเฉียงเหนือ'];
@@ -94,7 +174,10 @@ function showPhoto(i) {
     if (on) b.scrollIntoView({ block: 'nearest', inline: 'center', behavior: 'smooth' });
   });
 }
-function closePhotoViewer() { $('photoViewer').classList.add('hidden'); $('photoViewer').classList.remove('flex'); $('pvImg').removeAttribute('src'); }
+function closePhotoViewer() {
+  $('photoViewer').classList.add('hidden'); $('photoViewer').classList.remove('flex'); $('pvImg').removeAttribute('src');
+  if (photoSheetOn) { scrollToPhoto(pv.i, false); syncPhoto(pv.i); }   // แผงด้านล่าง + จุดบนแผนที่ ตามรูปที่ดูล่าสุด
+}
 $('pvClose').onclick = closePhotoViewer;
 $('pvPrev').onclick = () => showPhoto(pv.i - 1);
 $('pvNext').onclick = () => showPhoto(pv.i + 1);
