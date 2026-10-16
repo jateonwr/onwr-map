@@ -90,8 +90,8 @@ const OVERLAYS = [
     opacityProps: [['fill', 'fill-opacity', 1]],
   },
   {
-    // พื้นที่น้ำท่วมจากภาพดาวเทียม Sentinel-1 (S1D_20261009_1828.kmz) · สีแดงตามไฟล์ต้นฉบับ
-    id: 'flood', name: 'พื้นที่น้ำท่วม (9 ต.ค. 69)', url: 'data/flood-20261009.geojson', visible: true, opacity: 0.3,
+    // พื้นที่น้ำท่วมจากภาพดาวเทียม Sentinel-1 (GISTDA, KMZ) · สีแดงตามไฟล์ต้นฉบับ · เลือกวันที่ได้ (FLOOD_DATES)
+    id: 'flood', name: 'พื้นที่น้ำท่วม', url: '', visible: true, opacity: 0.3, dates: true,
     icon: 'area', swatch: '#ef4444', outline: '#991b1b', titleField: 'prov',
     countText: data => `${data.features.length.toLocaleString('th-TH')} แปลง · ${Math.round(data.features.reduce((s, f) => s + (f.properties.area_rai || 0), 0)).toLocaleString('th-TH')} ไร่`,
     layers: (src, op) => [
@@ -315,6 +315,16 @@ const store = {
   get(k, d) { try { const v = localStorage.getItem('wm2:' + k); return v == null ? d : JSON.parse(v); } catch { return d; } },
   set(k, v) { try { localStorage.setItem('wm2:' + k, JSON.stringify(v)); } catch {} },
 };
+
+/* ข้อมูลน้ำท่วมหลายวันที่ (ใหม่สุดก่อน = ค่าเริ่มต้นทุกครั้งที่เปิดแอป)
+   แต่ละวัน: แปลงน้ำท่วม · พื้นที่ท่วมรายตำบล (flood-tambon) · สรุป GISTDA (flood-summary จาก Excel) */
+const FLOOD_DATES = [
+  { key: '20261014', label: '14 ต.ค. 69' },
+  { key: '20261009', label: '9 ต.ค. 69' },
+];
+let floodDate = FLOOD_DATES[0];
+const floodUrl = d => `data/flood-${d.key}.geojson`;
+{ const o = OVERLAYS.find(x => x.id === 'flood'); o.url = floodUrl(floodDate); o.name = `พื้นที่น้ำท่วม (${floodDate.label})`; }
 
 let activeBase = store.get('basemap', 'streets');
 if (!BASEMAPS.some(b => b.id === activeBase)) activeBase = 'streets';
@@ -832,7 +842,10 @@ function renderLayerPanel() {
         <div class="flex items-center gap-3">
           <span class="w-9 h-9 rounded-lg flex-none bg-gray-100 grid place-items-center">${layerIcon(o, 26)}</span>
           <div class="flex-1 min-w-0">
-            <div class="font-medium">${o.name}</div>
+            ${o.dates ? `<div class="font-medium flex items-center gap-2 flex-wrap">พื้นที่น้ำท่วม
+              <select data-flood-date aria-label="วันที่ข้อมูลน้ำท่วม" class="h-8 rounded-lg border border-gray-300 bg-white pl-2 pr-1 text-sm font-normal">
+                ${FLOOD_DATES.map(d => `<option value="${d.key}" ${d.key === floodDate.key ? 'selected' : ''}>${d.label}</option>`).join('')}
+              </select></div>` : `<div class="font-medium">${o.name}</div>`}
             <div class="text-xs text-gray-500">${failed ? 'โหลดไม่สำเร็จ' : o.countText ? o.countText(st.data) : `${st.data.features.length} รายการ`}${o.lazy && !st.data ? ' · โหลดเมื่อเปิด' : ''}</div>
             ${!failed && layerNotes[o.id] ? layerNotes[o.id]() : ''}
           </div>
@@ -864,6 +877,7 @@ $('basemapList').addEventListener('click', e => {
 });
 
 $('overlayList').addEventListener('change', e => {
+  if (e.target.matches('[data-flood-date]')) { setFloodDate(e.target.value); return; }
   const id = e.target.dataset.toggle;
   if (!id) return;
   const o = OVERLAYS.find(x => x.id === id), st = overlayState[id];
@@ -1158,6 +1172,35 @@ async function updateVisitAmphoes() {
   }
   visitAmphoeFC = { type: 'FeatureCollection', features: [...hits.values()] };
   map.getSource('visit-amphoes')?.setData(visitAmphoeFC);
+}
+
+/* ---------- เปลี่ยนวันที่ข้อมูลน้ำท่วม ---------- */
+const floodDataCache = {};
+async function setFloodDate(key) {
+  const d = FLOOD_DATES.find(x => x.key === key), o = OVERLAYS.find(x => x.id === 'flood'), st = overlayState.flood;
+  if (!d || d === floodDate) return;
+  if (st.data) floodDataCache[floodDate.key] = st.data;
+  floodDate = d;
+  o.url = floodUrl(d); o.name = `พื้นที่น้ำท่วม (${d.label})`;
+  let data = floodDataCache[d.key];
+  if (!data) {
+    toast(`กำลังโหลดพื้นที่น้ำท่วม ${d.label}…`);
+    try {
+      const r = await fetch(o.url, { cache: 'no-cache' });
+      if (!r.ok) throw new Error(r.status);
+      data = await r.json();
+    } catch (err) { console.error('flood', err); toast(`โหลดพื้นที่น้ำท่วม ${d.label} ไม่สำเร็จ`); return; }
+    data.features.forEach((f, i) => { f.id = i; });
+    floodDataCache[d.key] = data;
+  }
+  if (floodDate !== d) return;   // เปลี่ยนวันที่อีกระหว่างโหลด
+  st.data = data; st.bounds = geomBounds(data);
+  map.getSource('flood')?.setData(data);
+  if (typeof ds !== 'undefined' && ds.pm && ds.pm.getSource('flood')) { ds.pm.getSource('flood').setData(data); renderPreview(); }
+  if (selectedInfo && selectedInfo.o.id === 'flood') closeSheet('infoSheet');   // แปลงของวันเดิม
+  renderLayerPanel();
+  renderFloodPanel();
+  if (!$('floodSummary').classList.contains('hidden')) setFloodSummary(true);
 }
 
 /* ============================================================
@@ -1532,8 +1575,8 @@ function updateZone(fix) {
  *  อยู่ในพื้นที่น้ำท่วมหรือไม่ / ระยะถึงพื้นที่ท่วมใกล้สุด + ต./อ./จ. + พื้นที่ท่วมของตำบล/อำเภอ/จังหวัด
  *  ข้อมูลตำบล (เฉพาะจังหวัดที่มีน้ำท่วมและรอบ ๆ) โหลดเมื่อเปิดกล่องครั้งแรก
  * ============================================================ */
-const FLOOD_SOURCE_TEXT = 'คำนวณจากข้อมูลพื้นที่น้ำท่วม (GISTDA) - 9 ต.ค. 69';
-const TAMBON_URL = 'data/tambon-flood-20261009.geojson';
+const floodSourceText = () => `คำนวณจากข้อมูลพื้นที่น้ำท่วม (GISTDA) - ${floodDate.label}`;
+const TAMBON_URL = 'data/tambon-areas.geojson';   // ขอบเขตตำบลแบบหยาบ (จังหวัดที่ท่วมทุกวันที่ + รอบ ๆ)
 const FLOOD_NEAR_KM = 20;          // ค้นหาพื้นที่ท่วมใกล้สุดในรัศมีนี้
 let floodPanelOn = false, tambonPromise = null, tambonIdx = null, floodIdx = null, fpLast = 0;
 let fpMode = 'gps', fpPoint = null;   // 'gps' = ตำแหน่งเครื่อง · 'pick' = จุดที่แตะบนแผนที่ { lng, lat }
@@ -1547,13 +1590,30 @@ function loadTambons() {
   if (!tambonPromise) tambonPromise = fetch(TAMBON_URL, { cache: 'no-cache' })
     .then(r => { if (!r.ok) throw new Error(r.status); return r.json(); })
     .then(d => {
-      const amp = {}, prov = {};
-      for (const f of d.features) { const p = f.properties; amp[p.ac] = (amp[p.ac] || 0) + p.fr; prov[p.pc] = (prov[p.pc] || 0) + p.fr; }
-      tambonIdx = { list: d.features.map(f => ({ f, b: bboxOf(f) })), amp, prov };
+      tambonIdx = { list: d.features.map(f => ({ f, b: bboxOf(f) })), byTc: Object.fromEntries(d.features.map(f => [f.properties.tc, f.properties])) };
       return tambonIdx;
     })
     .catch(err => { tambonPromise = null; throw err; });
   return tambonPromise;
+}
+/* พื้นที่ท่วมรายตำบลของวันที่เลือก { fr: {tc: ไร่}, amp: {ac: ไร่}, prov: {pc: ไร่} } · ยังไม่โหลด = null (โหลดแล้ววาดกล่องใหม่) */
+const floodTambonCache = {};
+function floodTambonNow() {
+  const key = floodDate.key, c = floodTambonCache[key];
+  if (c && c.fr) return c;
+  if (!c && tambonIdx) {
+    floodTambonCache[key] = {};
+    fetch(`data/flood-tambon-${key}.json`, { cache: 'no-cache' }).then(r => r.json()).then(fr => {
+      const amp = {}, prov = {};
+      for (const [tc, v] of Object.entries(fr)) {
+        const p = tambonIdx.byTc[tc];
+        if (p) { amp[p.ac] = (amp[p.ac] || 0) + v; prov[p.pc] = (prov[p.pc] || 0) + v; }
+      }
+      floodTambonCache[key] = { fr, amp, prov };
+      renderFloodPanel();
+    }).catch(err => { console.error('flood-tambon', err); delete floodTambonCache[key]; });
+  }
+  return null;
 }
 function floodIndex() {
   const d = overlayState.flood && overlayState.flood.data;
@@ -1617,7 +1677,7 @@ function renderFloodPanel() {
     dot.className = 'w-3 h-3 rounded-full flex-none bg-gray-300 animate-pulse';
     st.textContent = fpMode === 'pick' ? 'แตะแผนที่เพื่อเลือกจุด' : 'กำลังหาตำแหน่ง GPS…';
     $('fpPlace').textContent = ''; $('fpCoord').textContent = ''; $('fpStats').innerHTML = '';
-    $('fpMeta').textContent = FLOOD_SOURCE_TEXT;
+    $('fpMeta').textContent = floodSourceText();
     layoutBottomPanels(); return;
   }
   const fi = floodIndex();
@@ -1638,12 +1698,14 @@ function renderFloodPanel() {
     const p = tb.f.properties, L = admLabels(p);
     $('fpPlace').textContent = `${L.t}  ${L.a}  ${L.p}`;
     const cell = (k, v) => `<div class="rounded-lg ${v > 0 ? 'bg-red-50 text-red-800' : 'bg-gray-50 text-gray-500'} py-1"><div class="text-[11px] leading-tight">${k}</div><div class="text-[15px] font-semibold leading-tight tabular-nums">${raiText(v)}</div></div>`;
-    $('fpStats').innerHTML = cell(p.pc === 'TH10' ? 'แขวง (ไร่)' : 'ตำบล (ไร่)', p.fr) + cell(p.pc === 'TH10' ? 'เขต (ไร่)' : 'อำเภอ (ไร่)', tambonIdx.amp[p.ac]) + cell('จังหวัด (ไร่)', tambonIdx.prov[p.pc]);
+    const ft = floodTambonNow();
+    $('fpStats').innerHTML = !ft ? '<div class="col-span-3 text-xs text-gray-400 py-2">กำลังโหลดพื้นที่ท่วมรายตำบล…</div>'
+      : cell(p.pc === 'TH10' ? 'แขวง (ไร่)' : 'ตำบล (ไร่)', ft.fr[p.tc]) + cell(p.pc === 'TH10' ? 'เขต (ไร่)' : 'อำเภอ (ไร่)', ft.amp[p.ac]) + cell('จังหวัด (ไร่)', ft.prov[p.pc]);
   } else {
     $('fpPlace').textContent = tambonIdx ? 'นอกพื้นที่ข้อมูลตำบล (เฉพาะจังหวัดที่มีน้ำท่วมและรอบ ๆ)' : 'กำลังโหลดข้อมูลตำบล…';
     $('fpStats').innerHTML = '';
   }
-  $('fpMeta').textContent = FLOOD_SOURCE_TEXT;
+  $('fpMeta').textContent = floodSourceText();
   layoutBottomPanels();
 }
 /* กล่องน้ำท่วมอยู่ล่างสุดเต็มความกว้าง (มือถือ) · ปุ่มขวาล่างและแถบบันทึกเส้นทางเลื่อนขึ้นไปอยู่เหนือกล่อง
@@ -1715,8 +1777,7 @@ clickInterceptors.push(e => {
 });
 /* ---------- สรุปข้อมูลพื้นที่น้ำท่วม (GISTDA) — modal กลางจอ ----------
    ข้อมูลจาก S1D_20261009_1828.xlsx (ชีต Original รายตำบล รวมเป็นรายจังหวัด/อำเภอ) */
-const FLOOD_SUMMARY_URL = 'data/flood-summary-20261009.json';
-let floodSummaryPromise = null;
+let floodSummaryPromise = null, floodSummaryKey = null;   // สรุปของวันที่ใด (data/flood-summary-<วันที่>.json จาก Excel ของ GISTDA)
 const FS_COLS = [['flood', 'น้ำท่วม (ไร่)'], ['rice', 'นาข้าว (ไร่)'], ['pop', 'ประชาชน (คน)'], ['house', 'หลังคาเรือน'], ['road', 'ถนน (กม.)']];
 const fsNum = (v, k) => !v ? '–' : v.toLocaleString('th-TH', { maximumFractionDigits: k === 'road' ? 1 : 0 });
 function renderFloodSummary(d) {
@@ -1760,9 +1821,11 @@ function setFloodSummary(open) {
   $('floodSummary').classList.toggle('hidden', !open);
   $('floodSummary').classList.toggle('grid', open);
   if (!open) return;
-  if (!floodSummaryPromise) {
+  if (!floodSummaryPromise || floodSummaryKey !== floodDate.key) {
+    floodSummaryKey = floodDate.key;
+    $('fsSub').textContent = '';
     $('fsBody').innerHTML = '<p class="py-8 text-center text-sm text-gray-500">กำลังโหลด…</p>';
-    floodSummaryPromise = fetch(FLOOD_SUMMARY_URL, { cache: 'no-cache' })
+    floodSummaryPromise = fetch(`data/flood-summary-${floodDate.key}.json`, { cache: 'no-cache' })
       .then(r => { if (!r.ok) throw new Error(r.status); return r.json(); })
       .then(d => { renderFloodSummary(d); return d; })
       .catch(err => { floodSummaryPromise = null; console.error('flood summary', err); $('fsBody').innerHTML = '<p class="py-8 text-center text-sm text-red-600">โหลดข้อมูลสรุปไม่สำเร็จ</p>'; });

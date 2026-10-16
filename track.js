@@ -315,7 +315,7 @@ function trackDetailHtml(t) {
       ${row('ระยะทาง', fmtKm(t.distance))}
       ${row('ความเร็วเฉลี่ย', avg != null ? `${avg.toFixed(1)} กม./ชม.` : '–')}
       ${row('ความเร็วสูงสุด', mx != null ? `${mx.toFixed(0)} กม./ชม.` : '–')}
-      ${row('ผ่านพื้นที่น้ำท่วม', !fs ? 'ข้อมูลน้ำท่วมยังโหลดไม่เสร็จ' : fs.parcels
+      ${row(`ผ่านพื้นที่น้ำท่วม<br><span class="text-xs">(${floodDate.label})</span>`, !fs ? 'ข้อมูลน้ำท่วมยังโหลดไม่เสร็จ' : fs.parcels
         ? `<span class="text-red-700 font-medium">${fmtKm(fs.inDist)}</span> (${t.distance ? Math.round(fs.inDist / t.distance * 100) : 0}% ของเส้นทาง)<br>
            ${fs.parcels.toLocaleString('th-TH')} แปลง รวม ${Math.round(fs.rai).toLocaleString('th-TH')} ไร่<br>
            <span class="text-gray-500">${fs.provs.map(escapeHtml).join(', ')}</span>`
