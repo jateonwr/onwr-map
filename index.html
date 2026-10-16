@@ -460,16 +460,40 @@
     </div>
   </div>
 
+  <!-- หน้าต่างดูรูปถ่าย (photos.js) -->
+  <div id="photoViewer" class="hidden fixed inset-0 z-[70] bg-black/95 flex-col text-white" role="dialog" aria-modal="true" aria-label="รูปถ่าย">
+    <div class="flex items-center gap-2 px-3 pb-2" style="padding-top: max(10px, env(safe-area-inset-top))">
+      <div class="flex-1 min-w-0">
+        <div id="pvTitle" class="font-semibold leading-tight truncate"></div>
+        <div id="pvMeta" class="text-xs text-white/70 leading-tight mt-0.5 truncate"></div>
+      </div>
+      <button id="pvMap" class="h-9 px-3 rounded-full bg-white/15 text-sm font-medium active:bg-white/25 flex items-center gap-1.5">
+        <svg class="w-4 h-4" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C8.1 2 5 5.1 5 9c0 5.3 7 13 7 13s7-7.7 7-13c0-3.9-3.1-7-7-7zm0 9.5a2.5 2.5 0 110-5 2.5 2.5 0 010 5z"/></svg>ดูบนแผนที่</button>
+      <button id="pvClose" aria-label="ปิด" class="w-10 h-10 -mr-1 rounded-full grid place-items-center active:bg-white/15">
+        <svg class="w-6 h-6" viewBox="0 0 24 24" fill="currentColor"><path d="M19 6.4L17.6 5 12 10.6 6.4 5 5 6.4 10.6 12 5 17.6 6.4 19 12 13.4 17.6 19 19 17.6 13.4 12z"/></svg></button>
+    </div>
+    <div id="pvStage" class="relative flex-1 min-h-0 grid place-items-center select-none px-2">
+      <img id="pvImg" alt="รูปถ่าย" class="max-w-full max-h-full object-contain rounded-lg transition-opacity duration-200">
+      <div id="pvLoading" class="hidden absolute w-9 h-9 rounded-full border-4 border-white/30 border-t-white animate-spin"></div>
+      <button id="pvPrev" aria-label="รูปก่อนหน้า" class="absolute left-2 top-1/2 -translate-y-1/2 w-11 h-11 rounded-full bg-black/40 grid place-items-center active:bg-black/60">
+        <svg class="w-7 h-7" viewBox="0 0 24 24" fill="currentColor"><path d="M15.4 7.4 14 6l-6 6 6 6 1.4-1.4-4.6-4.6z"/></svg></button>
+      <button id="pvNext" aria-label="รูปถัดไป" class="absolute right-2 top-1/2 -translate-y-1/2 w-11 h-11 rounded-full bg-black/40 grid place-items-center active:bg-black/60">
+        <svg class="w-7 h-7" viewBox="0 0 24 24" fill="currentColor"><path d="M10 6 8.6 7.4 13.2 12l-4.6 4.6L10 18l6-6z"/></svg></button>
+    </div>
+    <div id="pvStrip" class="flex gap-1.5 overflow-x-auto px-3 pt-2" style="padding-bottom: max(10px, env(safe-area-inset-bottom))"></div>
+  </div>
+
   <!-- เมนูเลือกพื้นที่ที่เน้น (ใช้ร่วมกันทั้งแผนที่หลักและหน้าจัดวาง) -->
   <div id="focusMenu" role="menu" class="hidden fixed z-[60] w-[min(272px,calc(100vw-16px))] flex-col rounded-2xl bg-white shadow-2xl border border-gray-200"></div>
   <div id="toast" class="fixed left-1/2 -translate-x-1/2 safe-bottom mb-24 z-40 bg-gray-900 text-white text-sm rounded-lg px-4 py-2.5 shadow-lg hidden max-w-[90vw] text-center"></div>
 
   <!-- เปลี่ยนเลข ?v= ทุกครั้งที่แก้ไฟล์ .js เพื่อให้มือถือโหลดไฟล์ใหม่ -->
-  <script src="app.js?v=113"></script>
-  <script src="sheet.js?v=113"></script>
-  <script src="track.js?v=113"></script>
-  <script src="measure.js?v=113"></script>
-  <script src="export-render.js?v=113"></script>
-  <script src="export.js?v=113"></script>
+  <script src="app.js?v=116"></script>
+  <script src="sheet.js?v=116"></script>
+  <script src="track.js?v=116"></script>
+  <script src="measure.js?v=116"></script>
+  <script src="export-render.js?v=116"></script>
+  <script src="export.js?v=116"></script>
+  <script src="photos.js?v=116"></script>
 </body>
 </html>

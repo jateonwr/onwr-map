@@ -293,6 +293,21 @@ const OVERLAYS = [
     ],
     opacityProps: [['icon', 'icon-opacity', 1]],
   },
+  {
+    // รูปถ่ายจากการบินสำรวจ 14 ต.ค. 69 (พิกัด/เวลา/ความสูงจาก EXIF) · แตะ = เปิดหน้าต่างดูรูป (photos.js)
+    id: 'photos', name: 'รูปถ่ายพื้นที่', url: 'data/photos-20261014.geojson', visible: true, opacity: 1,
+    icon: 'camera', swatch: '#0e7490', titleField: 'name',
+    enrich: data => markPhotoStacks(data),
+    onFeatureClick: f => openPhotoViewer(f),
+    countText: data => `${data.features.length} รูป · บินสำรวจ 14 ต.ค. 69`,
+    layers: (src, op) => [
+      { id: `${src}-icon`, type: 'symbol', source: src, filter: ['==', ['get', 'top'], true],
+        layout: { 'icon-image': ['get', 'icon'], 'icon-allow-overlap': true, 'icon-ignore-placement': true,
+                  'icon-size': ['interpolate', ['linear'], ['zoom'], 5, 0.55, 9, 0.75, 13, 0.95] },
+        paint: { 'icon-opacity': op } },
+    ],
+    opacityProps: [['icon', 'icon-opacity', 1]],
+  },
 ];
 
 /* ============================================================
@@ -413,6 +428,7 @@ function addMapImages(m, colors = {}) {
   m.addImage('rect-blue', icon.image, { pixelRatio: icon.pixelRatio });
   const star = starIcon(colors.star || '#dc2626');
   m.addImage('star-red', star.image, { pixelRatio: star.pixelRatio });
+  if (typeof addPhotoImages === 'function') addPhotoImages(m);   // photos.js
 }
 
 /* ใส่ชั้นข้อมูลทั้งหมด (ที่โหลดแล้ว) ลงใน map instance อื่น เช่น แผนที่สำหรับ export */
@@ -1270,9 +1286,12 @@ map.on('click', e => {
     [[e.point.x - pad, e.point.y - pad], [e.point.x + pad, e.point.y + pad]], { layers: clickableLayers() });
   if (!hits.length) { closeSheet('infoSheet'); return; }
   // เส้น (ลำน้ำ) มาก่อน polygon เพราะแตะยากกว่า
-  hits.sort((a, b) => (a.layer.type === 'fill') - (b.layer.type === 'fill'));
+  // จุดที่มีการแตะเฉพาะ (เช่น รูปถ่าย) มาก่อน · เส้น (ลำน้ำ) มาก่อน polygon เพราะแตะยากกว่า
+  const special = l => !!(OVERLAYS.find(x => x.id === l.source) || {}).onFeatureClick;
+  hits.sort((a, b) => (special(b) - special(a)) || ((a.layer.type === 'fill') - (b.layer.type === 'fill')));
   const f = hits[0];
   const o = OVERLAYS.find(x => x.id === f.source);
+  if (o.onFeatureClick) { closeSheet('infoSheet'); o.onFeatureClick(overlayState[o.id].data.features[f.id]); return; }
   showInfo(o, overlayState[o.id].data.features[f.id]);
 });
 
@@ -1313,6 +1332,7 @@ const ICON_SHAPES = {
   line:       (o) => `<path d="M2 17c3-6 5-6.5 7-2.5s4.5 4 6.5-1S19.5 7 22 9" fill="none" stroke="${o.swatch}" stroke-width="2" stroke-linecap="round"/>`,
   'line-thick': (o) => `<path d="M2 17c3-6 5-6.5 7-2.5s4.5 4 6.5-1S19.5 7 22 9" fill="none" stroke="#ffffff" stroke-width="6" stroke-linecap="round"/><path d="M2 17c3-6 5-6.5 7-2.5s4.5 4 6.5-1S19.5 7 22 9" fill="none" stroke="${o.swatch}" stroke-width="3.4" stroke-linecap="round"/>`,
   circle:     (o) => `<circle cx="12" cy="12" r="7" fill="${o.swatch}" stroke="#ffffff" stroke-width="2.5"/>`,
+  camera:     (o) => `<circle cx="12" cy="12" r="10" fill="${o.swatch}" stroke="#ffffff" stroke-width="1.5"/><rect x="6.6" y="8.6" width="10.8" height="7.6" rx="1.4" fill="#ffffff"/><rect x="9.8" y="7.2" width="4.4" height="2" rx=".7" fill="#ffffff"/><circle cx="12" cy="12.4" r="2.3" fill="${o.swatch}"/>`,
   star:       (o) => `<path d="M12 2.5l2.8 5.8 6.3.8-4.6 4.4 1.2 6.3L12 16.8l-5.7 3 1.2-6.3-4.6-4.4 6.3-.8z" fill="${o.swatch}" stroke="#ffffff" stroke-width="1.5" stroke-linejoin="round"/>`,
 };
 function layerIcon(o, size = 20) {
