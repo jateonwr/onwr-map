@@ -230,7 +230,7 @@ const OVERLAYS = [
     // แนวคลองระบายน้ำ (โครงการ) จาก DigitizeRiver_MapToKML.kmz: แนวเขตคลอง ~180 ม. + จุดต้นคลอง/กลางทาง/ปลายคลอง
     // ตำบลที่ผ่าน (คำนวณจาก tha_admin3) เน้นได้จากแผงข้อมูล (canal-project-tambons.geojson)
     id: 'canal-project', name: 'แนวคลองระบายน้ำ', url: 'data/canal-project.geojson', visible: true, opacity: 0.55,
-    icon: 'line-thick', swatch: '#172554', titleField: 'name',
+    icon: 'line-thick', swatch: '#24408e', titleField: 'name',
     labels: true, labelClass: 'canal-label', labelMinZoom: 7, labelAnchor: 'left', labelOffset: [10, 0],
     countText: () => '',
     // ขอบเขตที่แนวคลองผ่าน: เลือกเปิด ตำบล / อำเภอ / จังหวัด ได้ในการ์ดของชั้นนี้ (canal-project-areas.geojson, lv = t/a/p)
@@ -243,11 +243,11 @@ const OVERLAYS = [
         paint: { 'line-color': '#facc15', 'line-width': ['interpolate', ['linear'], ['zoom'], 6, 2, 10, 3, 14, 4] } },
       { id: 'canal-areas-p', type: 'line', source: 'canal-areas', filter: ['==', ['get', 'lv'], 'p'], layout: { 'line-join': 'round' },
         paint: { 'line-color': '#eab308', 'line-width': ['interpolate', ['linear'], ['zoom'], 5, 3, 9, 4.5, 13, 6] } },
-      { id: `${src}-fill`, type: 'fill', source: src, filter: ['==', ['get', 'part'], 'corridor'], paint: { 'fill-color': '#172554', 'fill-opacity': op } },
+      { id: `${src}-fill`, type: 'fill', source: src, filter: ['==', ['get', 'part'], 'corridor'], paint: { 'fill-color': '#24408e', 'fill-opacity': op } },
       { id: `${src}-line`, type: 'line', source: src, filter: ['==', ['get', 'part'], 'corridor'], layout: { 'line-join': 'round' },
-        paint: { 'line-color': '#172554', 'line-width': ['interpolate', ['linear'], ['zoom'], 5, 3, 8, 4.5, 11, 6, 14, 8] } },   // เส้นหนา: ซูมออกเห็นเป็นแนวเดียวชัด ๆ
+        paint: { 'line-color': '#24408e', 'line-width': ['interpolate', ['linear'], ['zoom'], 5, 3, 8, 4.5, 11, 6, 14, 8] } },   // เส้นหนา: ซูมออกเห็นเป็นแนวเดียวชัด ๆ
       { id: `${src}-pt`, type: 'circle', source: src, filter: ['==', ['get', 'part'], 'point'],
-        paint: { 'circle-color': '#172554', 'circle-radius': CIRCLE_RADIUS_BY_ZOOM, 'circle-stroke-color': '#ffffff', 'circle-stroke-width': CIRCLE_STROKE_BY_ZOOM } },
+        paint: { 'circle-color': '#24408e', 'circle-radius': CIRCLE_RADIUS_BY_ZOOM, 'circle-stroke-color': '#ffffff', 'circle-stroke-width': CIRCLE_STROKE_BY_ZOOM } },
     ],
     opacityProps: [['fill', 'fill-opacity', 1]],
   },
@@ -798,7 +798,7 @@ const LABEL_STYLES = {
   'river-label': { size: 14, weight: 600, color: '#1d4ed8', halo: 2 },
   'stn-label':   { size: 13, weight: 700, color: '#9a3412', sub: { size: 11, weight: 600 }, halo: 3, family: 'system-ui, sans-serif' },
   'visit-label': { size: 13, weight: 700, color: '#991b1b', halo: 2 },
-  'canal-label': { size: 13, weight: 700, color: '#172554', halo: 2 },
+  'canal-label': { size: 13, weight: 700, color: '#24408e', halo: 2 },
   'prov-label':  { size: 13, weight: 600, color: '#111827', halo: 1.5, opacity: 0.85 },
   'basin-label': { size: 14, weight: 700, color: '#0f766e', halo: 2 },
 };
