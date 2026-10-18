@@ -1,8 +1,0 @@
-# ไฟล์ต้นฉบับ Shapefile (ใช้ data/*.geojson แทน)
-*.rar
-.claude/
-*.zip
-*.gpkg
-*.kmz
-*.xlsx
-src/
