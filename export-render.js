@@ -19,10 +19,10 @@ const FONT_TH = '"Noto Sans Thai", system-ui, sans-serif';
 // ลำดับทุ่งในตาราง/เลขหน้าชื่อ (ตามเอกสารต้นแบบ) — ทุ่งที่ไม่อยู่ในรายการต่อท้าย
 const TUNG_ORDER = ['บางระกำ', 'เชียงราก', 'ฝั่งซ้ายชัยนาทป่าสัก', 'ท่าวุ้ง', 'บางกุ่ม', 'บางกุ้ง',
   'บางบาล-บ้านแพน', 'ป่าโมก', 'ผักไห่', 'เจ้าเจ็ด', 'โครงการฯโพธิ์พระยา'];
-const LEGEND_ORDER = ['visits', 'photos', 'stations', 'water-other', 'streams-main', 'streams-sub', 'canals-bkk', 'canals-bkk-east', 'water-l', 'water-m', 'flood', 'tung', 'provinces', 'amphoes', 'tambons', 'basins'];
+const LEGEND_ORDER = ['visits', 'photos', 'canal-project', 'stations', 'water-other', 'streams-main', 'streams-sub', 'canals-bkk', 'canals-bkk-east', 'water-l', 'water-m', 'flood', 'tung', 'provinces', 'amphoes', 'tambons', 'basins'];
 const LABEL_CLASS_NAMES = {
   'tung-label': 'ชื่อทุ่งรับน้ำ', 'water-label': 'ชื่อเขื่อน / อาคารบังคับน้ำ', 'river-label': 'ชื่อแม่น้ำ',
-  'stn-label': 'รหัสสถานี', 'visit-label': 'จุดลงพื้นที่', 'prov-label': 'ชื่อจังหวัด', 'basin-label': 'ชื่อลุ่มน้ำหลัก',
+  'stn-label': 'รหัสสถานี', 'visit-label': 'จุดลงพื้นที่', 'canal-label': 'จุดแนวคลอง (โครงการ)', 'prov-label': 'ชื่อจังหวัด', 'basin-label': 'ชื่อลุ่มน้ำหลัก',
 };
 const BOX_NAMES = { title: 'ชื่อแผนที่', logo: 'โลโก้', table: 'ตาราง', legend: 'สัญลักษณ์', north: 'ลูกศรทิศเหนือ', scalebar: 'มาตราส่วน' };
 // คอลัมน์ตาราง 11 ทุ่ง (w = มม. บน A2 ที่ขนาดกล่อง 1×) — "name" แสดงเสมอ

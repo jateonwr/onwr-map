@@ -1,0 +1,516 @@
+'use strict';
+
+/* ============================================================
+ *  บันทึกเส้นทาง (เก็บในเครื่อง — IndexedDB)
+ *  หมายเหตุ: เว็บจะได้ตำแหน่งเฉพาะตอนเปิดหน้าแอปค้างไว้และจอติด
+ *  ระหว่างบันทึกแอปจึงสั่งไม่ให้จอดับ (Screen Wake Lock)
+ * ============================================================ */
+
+const TRACK = {
+  minDistance: 5,     // เมตร — ไม่เก็บจุดที่ห่างจากจุดก่อนหน้าน้อยกว่านี้ (กันจุดซ้ำตอนจอดนิ่ง)
+  maxAccuracy: 50,    // เมตร — ไม่เก็บจุดที่ GPS คลาดเคลื่อนมากกว่านี้
+  color: '#7c3aed',
+};
+
+/* ---------- IndexedDB ---------- */
+const trackDB = (() => {
+  let dbp;
+  const open = () => dbp || (dbp = new Promise((ok, fail) => {
+    const r = indexedDB.open('watermap', 1);
+    r.onupgradeneeded = () => r.result.createObjectStore('tracks', { keyPath: 'id' });
+    r.onsuccess = () => ok(r.result);
+    r.onerror = () => fail(r.error);
+  }));
+  const tx = async (mode, fn) => {
+    const db = await open();
+    return new Promise((ok, fail) => {
+      const t = db.transaction('tracks', mode);
+      const req = fn(t.objectStore('tracks'));
+      t.oncomplete = () => ok(req && req.result);
+      t.onerror = () => fail(t.error);
+    });
+  };
+  return {
+    all: () => tx('readonly', s => s.getAll()),
+    put: t => tx('readwrite', s => s.put(t)),
+    del: id => tx('readwrite', s => s.delete(id)),
+  };
+})();
+
+/* ---------- สถานะ ---------- */
+let tracks = [];                                   // เส้นทางทั้งหมด (ใหม่สุดก่อน)
+let rec = null;                                    // { track, paused, lastPt, runStart, lastSave }
+const shownTracks = new Set(store.get('trackShown', []));
+let wakeLock = null;
+let recTimer = null;
+
+function haversine(a, b) {
+  const R = 6371000, toR = Math.PI / 180;
+  const dLat = (b[1] - a[1]) * toR, dLng = (b[0] - a[0]) * toR;
+  const h = Math.sin(dLat / 2) ** 2 + Math.cos(a[1] * toR) * Math.cos(b[1] * toR) * Math.sin(dLng / 2) ** 2;
+  return 2 * R * Math.asin(Math.sqrt(h));
+}
+
+const pointCount = t => t.segments.reduce((n, s) => n + s.length, 0);
+const elapsedOf = t => t.elapsed + (rec && rec.track === t && !rec.paused ? Date.now() - rec.runStart : 0);
+
+function fmtDuration(ms) {
+  const s = Math.floor(ms / 1000);
+  const h = Math.floor(s / 3600), m = Math.floor(s % 3600 / 60), ss = s % 60;
+  return [h, m, ss].map(x => String(x).padStart(2, '0')).join(':');
+}
+function fmtDurationShort(ms) {
+  const m = Math.round(ms / 60000);
+  if (m < 1) return '<1 นาที';
+  return m < 60 ? `${m} นาที` : `${Math.floor(m / 60)} ชม. ${m % 60} นาที`;
+}
+const fmtKm = m => `${(m / 1000).toFixed(2)} กม.`;
+
+/* ---------- เปิดจอค้าง ---------- */
+async function keepAwake(on) {
+  try {
+    if (on && !wakeLock && 'wakeLock' in navigator) {
+      wakeLock = await navigator.wakeLock.request('screen');
+      wakeLock.addEventListener('release', () => { wakeLock = null; });
+    } else if (!on && wakeLock) {
+      await wakeLock.release(); wakeLock = null;
+    }
+  } catch (err) { console.warn('wakeLock', err); }
+}
+
+/* ---------- เริ่ม / พัก / ต่อ / หยุด ---------- */
+async function startRecording() {
+  if (watchId == null) {
+    if (!startTracking()) return;
+    setFollow('follow');
+    enableOrientation();
+  }
+  const now = Date.now();
+  const track = {
+    id: now,
+    name: new Date(now).toLocaleString('th-TH', { day: 'numeric', month: 'short', year: '2-digit', hour: '2-digit', minute: '2-digit' }) + ' น.',
+    startedAt: now, endedAt: null, distance: 0, elapsed: 0,
+    segments: [[]], zones: [], active: true,
+  };
+  rec = { track, paused: false, lastPt: null, runStart: now, lastSave: 0 };
+  tracks.unshift(track);
+  await trackDB.put(track);
+  navigator.storage?.persist?.();
+  if (!('wakeLock' in navigator)) toast('เปิดหน้าจอค้างไว้ระหว่างบันทึก (ถ้าจอดับจะหยุดเก็บตำแหน่ง)');
+  keepAwake(true);
+  if (lastFix) addTrackPoint(lastFix);
+  updateRecUI();
+}
+
+function pauseRecording() {
+  if (!rec || rec.paused) return;
+  rec.track.elapsed += Date.now() - rec.runStart;
+  rec.paused = true;
+  keepAwake(false);
+  saveTrack(true);
+  updateRecUI();
+}
+
+function resumeRecording() {
+  if (!rec || !rec.paused) return;
+  if (watchId == null && !startTracking()) return;
+  rec.paused = false;
+  rec.runStart = Date.now();
+  rec.lastPt = null;
+  if (rec.track.segments[rec.track.segments.length - 1].length) rec.track.segments.push([]);
+  keepAwake(true);
+  if (lastFix) addTrackPoint(lastFix);
+  updateRecUI();
+}
+
+async function stopRecording() {
+  if (!rec) return;
+  const name = await promptModal('หยุดบันทึกเส้นทางนี้?\nตั้งชื่อรอบ (แก้ภายหลังได้)', rec.track.name, { ok: 'หยุดบันทึก', danger: true, placeholder: 'เช่น บินสำรวจ อยุธยา เช้า' });
+  if (name == null || !rec) return;
+  const t = rec.track;
+  if (name) t.name = name;
+  if (!rec.paused) t.elapsed += Date.now() - rec.runStart;
+  t.active = false;
+  t.endedAt = Date.now();
+  t.segments = t.segments.filter(s => s.length);
+  rec = null;
+  keepAwake(false);
+  if (pointCount(t) < 2) {
+    await trackDB.del(t.id);
+    tracks = tracks.filter(x => x !== t);
+    toast('เส้นทางสั้นเกินไป ไม่ได้บันทึก');
+  } else {
+    await trackDB.put(t);
+    shownTracks.add(t.id);
+    store.set('trackShown', [...shownTracks]);
+    toast(`บันทึกแล้ว ${fmtKm(t.distance)} · ${fmtDurationShort(t.elapsed)}`);
+    if (!store.get('hint:trackList', false)) {   // บอกครั้งแรกว่าดูรอบที่บันทึกได้จากไหน
+      store.set('hint:trackList', true);
+      setTimeout(() => toast('ดูรอบที่บันทึก: กดค้างที่ปุ่มบันทึก (●)'), 2600);
+    }
+  }
+  updateRecUI();
+  renderTrackMap();
+  renderTrackList();
+}
+
+function saveTrack(force) {
+  if (!rec) return;
+  const now = Date.now();
+  if (!force && now - rec.lastSave < 10000) return;
+  rec.lastSave = now;
+  const t = rec.track;
+  const snapshot = { ...t, elapsed: elapsedOf(t) };   // เก็บเวลาที่ผ่านไปล่าสุดเผื่อแอปถูกปิดกะทันหัน
+  trackDB.put(snapshot).catch(err => console.error('save track', err));
+}
+
+/* ---------- รับจุด GPS ---------- */
+function addTrackPoint(fix) {
+  if (!rec || rec.paused) return;
+  if (fix.accuracy > TRACK.maxAccuracy) return;
+  const p = [+fix.lng.toFixed(6), +fix.lat.toFixed(6), fix.time || Date.now(),
+             fix.altitude != null ? Math.round(fix.altitude * 10) / 10 : null, Math.round(fix.accuracy)];
+  const t = rec.track;
+  if (rec.lastPt) {
+    const d = haversine(rec.lastPt, p);
+    if (d < TRACK.minDistance) return;
+    t.distance += d;
+  }
+  t.segments[t.segments.length - 1].push(p);
+  rec.lastPt = p;
+
+  const z = zoneAt(p[0], p[1], false);
+  const zn = z && displayName(z.layer, z.feature.properties);
+  if (zn && !t.zones.includes(zn)) t.zones.push(zn);
+
+  map.getSource('track-live')?.setData(trackFeature(t));
+  saveTrack(false);
+}
+fixListeners.push(addTrackPoint);
+
+/* ---------- วาดบนแผนที่ ---------- */
+function trackFeature(t) {
+  return {
+    type: 'Feature', properties: { id: t.id },
+    geometry: { type: 'MultiLineString', coordinates: t.segments.filter(s => s.length).map(s => s.map(p => [p[0], p[1]])) },
+  };
+}
+
+function renderTrackMap() {
+  if (!map.getSource('tracks-saved')) return;
+  map.getSource('tracks-saved').setData({
+    type: 'FeatureCollection',
+    features: tracks.filter(t => !t.active && shownTracks.has(t.id)).map(trackFeature),
+  });
+  map.getSource('track-live').setData(rec ? trackFeature(rec.track) : emptyFC());
+}
+
+onMapReady.push(() => {
+  map.addSource('tracks-saved', { type: 'geojson', data: emptyFC() });
+  map.addSource('track-live', { type: 'geojson', data: emptyFC() });
+  const width = ['interpolate', ['linear'], ['zoom'], 8, 2.5, 14, 5, 18, 8];
+  const casing = ['interpolate', ['linear'], ['zoom'], 8, 4.5, 14, 8, 18, 12];
+  for (const src of ['tracks-saved', 'track-live']) {
+    map.addLayer({ id: `${src}-casing`, type: 'line', source: src, layout: { 'line-cap': 'round', 'line-join': 'round' },
+      paint: { 'line-color': '#ffffff', 'line-width': casing, 'line-opacity': src === 'track-live' ? 0.9 : 0.6 } });
+    map.addLayer({ id: `${src}-line`, type: 'line', source: src, layout: { 'line-cap': 'round', 'line-join': 'round' },
+      paint: { 'line-color': TRACK.color, 'line-width': width, 'line-opacity': src === 'track-live' ? 1 : 0.7 } });
+  }
+  renderTrackMap();
+});
+
+/* ---------- แถบควบคุมขณะบันทึก ---------- */
+const ICON_PAUSE = '<svg class="w-6 h-6" viewBox="0 0 24 24" fill="currentColor"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg>';
+const ICON_PLAY = '<svg class="w-6 h-6" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>';
+
+/* ปุ่มบันทึก: ยังแสดงระหว่างบันทึก (จุดแดงกระพริบ = กำลังบันทึก · จุดแดงนิ่ง = พัก) · กดเพื่อซ่อน/แสดงแถบบันทึก */
+let recBarCollapsed = false;
+function updateRecUI() {
+  const on = !!rec, barOn = on && !recBarCollapsed;
+  $('recBar').classList.toggle('hidden', !barOn);
+  $('recBar').classList.toggle('flex', barOn);
+  $('recIcon').className = `relative w-4 h-4 rounded-full bg-red-600 ring-4 ${!on ? 'ring-red-100' : rec.paused ? 'ring-red-100' : 'ring-red-200 animate-pulse'}`;   // จุดแดงเสมอ: กระพริบ = กำลังบันทึก · นิ่ง = พัก
+  $('recIcon').innerHTML = on && !rec.paused ? '<span class="absolute inset-0 rounded-full bg-red-500 animate-ping"></span>' : '';
+  $('btnRecord').setAttribute('aria-label', !on ? 'บันทึกเส้นทาง' : barOn ? 'ซ่อนแถบบันทึก' : 'แสดงแถบบันทึก (กำลังบันทึก)');
+  clearInterval(recTimer);
+  if (!on) { recBarCollapsed = false; return; }
+  $('btnRecPause').innerHTML = rec.paused ? ICON_PLAY : ICON_PAUSE;
+  $('btnRecPause').setAttribute('aria-label', rec.paused ? 'บันทึกต่อ' : 'พักการบันทึก');
+  $('recDot').className = `w-3 h-3 rounded-full flex-none ${rec.paused ? 'bg-gray-400' : 'bg-red-600 animate-pulse'}`;
+  const tickRec = () => {
+    if (!rec) { clearInterval(recTimer); return; }
+    $('recTime').textContent = (rec.paused ? 'พัก · ' : '') + fmtDuration(elapsedOf(rec.track));
+    $('recDist').textContent = fmtKm(rec.track.distance) + (rec.track.zones.length ? ` · ${rec.track.zones.join(', ')}` : '');
+  };
+  tickRec();
+  recTimer = setInterval(tickRec, 1000);
+}
+
+$('btnRecord').onclick = () => {   // กดค้าง = เปิดรอบที่บันทึก
+  if (longPressed) { longPressed = false; return; }
+  if (!rec) { recBarCollapsed = false; startRecording(); return; }
+  recBarCollapsed = !recBarCollapsed;   // กำลังบันทึก: ซ่อน/แสดงแถบ
+  updateRecUI();
+};
+$('btnRecPause').onclick = () => rec && (rec.paused ? resumeRecording() : pauseRecording());
+$('btnRecStop').onclick = stopRecording;
+
+document.addEventListener('visibilitychange', () => {
+  if (!rec) return;
+  if (document.visibilityState === 'hidden') saveTrack(true);
+  else if (!rec.paused) keepAwake(true);   // wake lock หลุดเมื่อสลับแอป ต้องขอใหม่
+});
+window.addEventListener('pagehide', () => saveTrack(true));
+
+/* ---------- รอบที่บันทึก: รายการ + รายละเอียด ---------- */
+let openTrackId = null;          // รอบที่กางรายละเอียดอยู่
+const fmtDate = ms => ms ? new Date(ms).toLocaleString('th-TH', { day: 'numeric', month: 'short', year: '2-digit', hour: '2-digit', minute: '2-digit' }) + ' น.' : '–';
+const fmtTime = ms => ms ? new Date(ms).toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' }) + ' น.' : '–';
+const kmh = (m, ms) => ms > 0 ? (m / 1000) / (ms / 3600000) : null;
+
+/* ความเร็วสูงสุด: จากจุดที่ห่างกันอย่างน้อย 3 วินาที (กันค่ากระโดดจาก GPS) */
+function maxSpeed(t) {
+  let best = null;
+  for (const seg of t.segments) {
+    let a = 0;
+    for (let b = 1; b < seg.length; b++) {
+      while (a < b && seg[b][2] - seg[a][2] > 15000) a++;
+      if (seg[a][2] == null || seg[b][2] == null) continue;
+      const dt = seg[b][2] - seg[a][2];
+      if (dt < 3000) continue;
+      const v = kmh(haversine(seg[a], seg[b]), dt);
+      if (v != null && (best == null || v > best)) best = v;
+    }
+  }
+  return best;
+}
+
+/* พื้นที่น้ำท่วมที่ผ่าน: ระยะทางในพื้นที่ท่วม, จำนวนแปลง + พื้นที่ (ไร่), จังหวัด */
+function floodStatsOf(t) {
+  const fi = typeof floodIndex === 'function' ? floodIndex() : null;
+  if (!fi) return null;
+  let inDist = 0;
+  const parcels = new Map(), provs = new Set();
+  const hitAt = p => fi.list.find(({ f, b }) => inBox(p[0], p[1], b) && inGeometry(p[0], p[1], f.geometry));
+  for (const seg of t.segments) {
+    let prev = null, prevIn = false;
+    for (const p of seg) {
+      const h = hitAt(p);
+      if (h) { parcels.set(h.f, h.f.properties.area_rai || 0); provs.add(String(h.f.properties.prov || '').replace(/^จ\./, '')); }
+      if (prev) { const d = haversine(prev, p); inDist += h && prevIn ? d : h || prevIn ? d / 2 : 0; }
+      prev = p; prevIn = !!h;
+    }
+  }
+  return { inDist, parcels: parcels.size, rai: [...parcels.values()].reduce((a, b) => a + b, 0), provs: [...provs] };
+}
+
+function trackDetailHtml(t) {
+  const end = t.endedAt || (t.segments.flat().slice(-1)[0] || [])[2];
+  const avg = kmh(t.distance, t.elapsed), mx = maxSpeed(t), fs = floodStatsOf(t);
+  const row = (k, v) => `<div class="flex gap-3 py-1.5"><dt class="w-28 flex-none text-gray-500">${k}</dt><dd class="flex-1 min-w-0">${v}</dd></div>`;
+  return `<dl class="text-sm divide-y divide-gray-100">
+      ${row('เริ่ม', fmtDate(t.startedAt))}
+      ${row('จบ', end && new Date(end).toDateString() === new Date(t.startedAt).toDateString() ? fmtTime(end) : fmtDate(end))}
+      ${row('ระยะเวลา', fmtDurationShort(t.elapsed))}
+      ${row('ระยะทาง', fmtKm(t.distance))}
+      ${row('ความเร็วเฉลี่ย', avg != null ? `${avg.toFixed(1)} กม./ชม.` : '–')}
+      ${row('ความเร็วสูงสุด', mx != null ? `${mx.toFixed(0)} กม./ชม.` : '–')}
+      ${row(`ผ่านพื้นที่น้ำท่วม<br><span class="text-xs">(${floodDate.label})</span>`, !fs ? 'ข้อมูลน้ำท่วมยังโหลดไม่เสร็จ' : fs.parcels
+        ? `<span class="text-red-700 font-medium">${fmtKm(fs.inDist)}</span> (${t.distance ? Math.round(fs.inDist / t.distance * 100) : 0}% ของเส้นทาง)<br>
+           ${fs.parcels.toLocaleString('th-TH')} แปลง รวม ${Math.round(fs.rai).toLocaleString('th-TH')} ไร่<br>
+           <span class="text-gray-500">${fs.provs.map(escapeHtml).join(', ')}</span>`
+        : 'ไม่ผ่าน')}
+      ${t.zones.length ? row('ทุ่งที่ผ่าน', t.zones.map(escapeHtml).join(', ')) : ''}
+      ${t.imported ? row('ที่มา', `นำเข้าจาก ${escapeHtml(t.source || 'GPX')}`) : ''}
+    </dl>
+    <div class="flex gap-2 pt-2">
+      <button data-track-rename="${t.id}" class="flex-1 h-10 rounded-xl bg-gray-100 text-sm font-medium text-gray-800 active:bg-gray-200">แก้ชื่อ</button>
+      <button data-track-export="${t.id}" class="flex-1 h-10 rounded-xl bg-gray-100 text-sm font-medium text-gray-800 active:bg-gray-200">ส่งออก GPX</button>
+      <button data-track-del="${t.id}" class="flex-1 h-10 rounded-xl bg-red-50 text-sm font-medium text-red-700 active:bg-red-100">ลบ</button>
+    </div>`;
+}
+
+const EYE_ON = '<path d="M12 4.5C7 4.5 2.7 7.6 1 12c1.7 4.4 6 7.5 11 7.5s9.3-3.1 11-7.5c-1.7-4.4-6-7.5-11-7.5zM12 17a5 5 0 110-10 5 5 0 010 10zm0-8a3 3 0 100 6 3 3 0 000-6z"/>';
+const EYE_OFF = '<path d="M12 7a5 5 0 015 5c0 .65-.13 1.26-.36 1.83l2.92 2.92A11.8 11.8 0 0023 12c-1.73-4.39-6-7.5-11-7.5-1.4 0-2.74.25-3.98.7l2.16 2.16C10.74 7.13 11.35 7 12 7zM2 4.27l2.28 2.28.46.46A11.8 11.8 0 001 12c1.73 4.39 6 7.5 11 7.5 1.55 0 3.03-.3 4.38-.84l.42.42L19.73 22 21 20.73 3.27 3 2 4.27zM7.53 9.8l1.55 1.55A2.8 2.8 0 009 12a3 3 0 003 3c.22 0 .44-.03.65-.08l1.55 1.55A5 5 0 017.53 9.8zm4.31-.78l3.15 3.15.02-.16a3 3 0 00-3-3l-.17.01z"/>';
+
+function renderTrackList() {
+  const list = tracks.filter(t => !t.active);
+  $('trackCount').textContent = list.length ? `(${list.length})` : '';
+  $('trackList').innerHTML = list.length ? list.map(t => {
+    const open = openTrackId === t.id, shown = shownTracks.has(t.id);
+    return `
+    <div class="rounded-2xl border ${open ? 'border-violet-300 bg-violet-50/40' : 'border-gray-200'} p-3">
+      <div class="flex items-center gap-2">
+        <button data-track-fit="${t.id}" class="flex-1 min-w-0 text-left flex items-center gap-3 active:opacity-60">
+          <svg class="w-8 h-8 flex-none" viewBox="0 0 32 32"><path d="M5 25c5-1 4-9 10-10s6-8 12-10" fill="none" stroke="${TRACK.color}" stroke-width="3" stroke-linecap="round"/></svg>
+          <span class="min-w-0">
+            <span class="block font-medium truncate">${escapeHtml(t.name)}</span>
+            <span class="block text-xs text-gray-500 truncate">${fmtDate(t.startedAt)} · ${fmtKm(t.distance)} · ${fmtDurationShort(t.elapsed)}</span>
+          </span>
+        </button>
+        <button data-track-show="${t.id}" aria-label="${shown ? 'ซ่อน' : 'แสดง'}บนแผนที่" class="w-10 h-10 rounded-full grid place-items-center active:bg-gray-100 ${shown ? 'text-violet-700' : 'text-gray-400'}">
+          <svg class="w-5 h-5" viewBox="0 0 24 24" fill="currentColor">${shown ? EYE_ON : EYE_OFF}</svg>
+        </button>
+        <button data-track-info="${t.id}" aria-label="รายละเอียด" aria-expanded="${open}" class="w-10 h-10 rounded-full grid place-items-center active:bg-gray-100 ${open ? 'text-violet-700' : 'text-gray-600'}">
+          <svg class="w-5 h-5 transition-transform ${open ? 'rotate-180' : ''}" viewBox="0 0 24 24" fill="currentColor"><path d="M7.4 8.6 12 13.2l4.6-4.6L18 10l-6 6-6-6z"/></svg>
+        </button>
+      </div>
+      ${open ? `<div class="mt-2 pt-1 border-t border-gray-200">${trackDetailHtml(t)}</div>` : ''}
+    </div>`;
+  }).join('')
+    : `<div class="text-sm text-gray-500 rounded-2xl border border-dashed border-gray-300 p-4 text-center">ยังไม่มีเส้นทาง — กดปุ่ม <span class="inline-block w-2.5 h-2.5 rounded-full bg-red-600 align-middle"></span> บนแผนที่เพื่อเริ่มบันทึก<br>หรือกด "นำเข้า GPX"</div>`;
+}
+
+$('trackList').addEventListener('click', async e => {
+  const btn = e.target.closest('button');
+  if (!btn) return;
+  const d = btn.dataset;
+  const id = +(d.trackFit || d.trackShow || d.trackInfo || d.trackRename || d.trackExport || d.trackDel);
+  const t = tracks.find(x => x.id === id);
+  if (!t) return;
+
+  if (d.trackFit) {
+    shownTracks.add(id);
+    store.set('trackShown', [...shownTracks]);
+    renderTrackMap(); renderTrackList();
+    closeSheet('tracksSheet');
+    fitTo(geomBounds(trackFeature(t)));
+  } else if (d.trackShow) {
+    shownTracks.has(id) ? shownTracks.delete(id) : shownTracks.add(id);
+    store.set('trackShown', [...shownTracks]);
+    renderTrackMap(); renderTrackList();
+  } else if (d.trackInfo) {
+    openTrackId = openTrackId === id ? null : id;
+    renderTrackList();
+  } else if (d.trackRename) {
+    const name = await promptModal('แก้ชื่อรอบ', t.name, { ok: 'บันทึก' });
+    if (!name) return;
+    t.name = name;
+    await trackDB.put(t);
+    renderTrackList();
+  } else if (d.trackExport) {
+    exportGPX(t);
+  } else if (d.trackDel) {
+    if (!await confirmModal(`ลบเส้นทาง "${t.name}"?\nลบแล้วกู้คืนไม่ได้`, { ok: 'ลบ', danger: true })) return;
+    await trackDB.del(id);
+    tracks = tracks.filter(x => x !== t);
+    shownTracks.delete(id);
+    store.set('trackShown', [...shownTracks]);
+    if (openTrackId === id) openTrackId = null;
+    renderTrackMap(); renderTrackList();
+  }
+});
+
+/* ---------- เปิดแผงรอบที่บันทึก: กดค้างปุ่มบันทึก · ปุ่มบนแถบขณะบันทึก · ปุ่มในแผงชั้นข้อมูล ---------- */
+function openTracks() { renderTrackList(); openSheet('tracksSheet'); }
+let pressTimer = null, longPressed = false;
+$('btnRecord').addEventListener('pointerdown', () => {
+  longPressed = false;
+  clearTimeout(pressTimer);
+  pressTimer = setTimeout(() => { longPressed = true; navigator.vibrate?.(15); openTracks(); }, 550);
+});
+for (const ev of ['pointerup', 'pointerleave', 'pointercancel']) $('btnRecord').addEventListener(ev, () => clearTimeout(pressTimer));
+$('btnRecord').addEventListener('contextmenu', e => e.preventDefault());   // กดค้างบนมือถือไม่ให้เด้งเมนู
+$('btnRecList').onclick = openTracks;
+$('btnOpenTracks').onclick = openTracks;
+
+/* ---------- นำเข้า GPX ---------- */
+function parseGPX(text, fileName) {
+  const xml = new DOMParser().parseFromString(text, 'application/xml');
+  if (xml.getElementsByTagName('parsererror').length) throw new Error('อ่านไฟล์ไม่ได้');
+  const take = nodes => nodes.map(n => {
+    const tm = n.getElementsByTagName('time')[0], ele = n.getElementsByTagName('ele')[0];
+    const time = tm ? Date.parse(tm.textContent) : NaN;
+    return [+(+n.getAttribute('lon')).toFixed(6), +(+n.getAttribute('lat')).toFixed(6), Number.isFinite(time) ? time : null,
+            ele && Number.isFinite(+ele.textContent) ? +ele.textContent : null, null];
+  }).filter(p => Number.isFinite(p[0]) && Number.isFinite(p[1]) && Math.abs(p[1]) <= 90 && Math.abs(p[0]) <= 180);
+  let segments = [...xml.getElementsByTagName('trkseg')].map(sg => take([...sg.getElementsByTagName('trkpt')])).filter(sg => sg.length);
+  if (!segments.length) segments = [...xml.getElementsByTagName('rte')].map(r => take([...r.getElementsByTagName('rtept')])).filter(sg => sg.length);
+  if (!segments.length) throw new Error('ไม่มีเส้นทางในไฟล์');
+  const nameNode = xml.getElementsByTagName('trk')[0]?.getElementsByTagName('name')[0] || xml.getElementsByTagName('name')[0];
+  const pts = segments.flat(), times = pts.map(p => p[2]).filter(v => v != null);
+  let distance = 0;
+  for (const sg of segments) for (let i = 1; i < sg.length; i++) distance += haversine(sg[i - 1], sg[i]);
+  let elapsed = 0;   // เวลาที่เดินทางจริง (ไม่นับช่วงพักระหว่าง segment)
+  for (const sg of segments) { const ts = sg.map(p => p[2]).filter(v => v != null); if (ts.length > 1) elapsed += ts[ts.length - 1] - ts[0]; }
+  const zones = [];
+  for (const p of pts.filter((_, i) => i % 5 === 0)) {
+    const z = zoneAt(p[0], p[1], false), zn = z && displayName(z.layer, z.feature.properties);
+    if (zn && !zones.includes(zn)) zones.push(zn);
+  }
+  return {
+    name: (nameNode && nameNode.textContent.trim()) || fileName.replace(/\.gpx$/i, ''),
+    startedAt: times.length ? Math.min(...times) : Date.now(), endedAt: times.length ? Math.max(...times) : null,
+    distance, elapsed, segments, zones, active: false, imported: true, source: fileName,
+  };
+}
+$('gpxInput').addEventListener('change', async e => {
+  const files = [...e.target.files];
+  e.target.value = '';
+  let added = 0, lastT = null;
+  for (const file of files) {
+    try {
+      const t = { id: Date.now() + added, ...parseGPX(await file.text(), file.name) };
+      tracks.push(t);
+      await trackDB.put(t);
+      shownTracks.add(t.id);
+      added++; lastT = t;
+    } catch (err) {
+      console.error('GPX', file.name, err);
+      toast(`นำเข้า ${file.name} ไม่สำเร็จ: ${err.message}`);
+    }
+  }
+  if (!added) return;
+  tracks.sort((a, b) => (b.startedAt || b.id) - (a.startedAt || a.id));
+  store.set('trackShown', [...shownTracks]);
+  openTrackId = lastT.id;
+  renderTrackMap(); renderTrackList();
+  toast(`นำเข้าแล้ว ${added} เส้นทาง`);
+  fitTo(geomBounds(trackFeature(lastT)));
+});
+
+/* ---------- ส่งออก GPX (เปิดได้ใน Google Earth, QGIS, แอป GPS ทั่วไป) ---------- */
+function toGPX(t) {
+  const x = s => String(s).replace(/[<>&"]/g, c => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;', '"': '&quot;' }[c]));
+  const segs = t.segments.filter(s => s.length).map(s => '    <trkseg>\n' + s.map(p =>
+    `      <trkpt lat="${p[1]}" lon="${p[0]}">${p[3] != null ? `<ele>${p[3]}</ele>` : ''}${p[2] != null ? `<time>${new Date(p[2]).toISOString()}</time>` : ''}</trkpt>`
+  ).join('\n') + '\n    </trkseg>').join('\n');
+  return `<?xml version="1.0" encoding="UTF-8"?>
+<gpx version="1.1" creator="แผนที่ลุ่มน้ำ" xmlns="http://www.topografix.com/GPX/1/1">
+  <trk>
+    <name>${x(t.name)}</name>
+    <desc>${x(`${fmtKm(t.distance)} · ${fmtDurationShort(t.elapsed)}${t.zones.length ? ' · ผ่าน ' + t.zones.join(', ') : ''}`)}</desc>
+${segs}
+  </trk>
+</gpx>
+`;
+}
+
+async function exportGPX(t) {
+  const d = new Date(t.startedAt);
+  const pad = n => String(n).padStart(2, '0');
+  const name = `track-${d.getFullYear()}${pad(d.getMonth() + 1)}${pad(d.getDate())}-${pad(d.getHours())}${pad(d.getMinutes())}.gpx`;
+  const file = new File([toGPX(t)], name, { type: 'application/gpx+xml' });
+  await shareOrDownload(file, t.name);
+}
+
+/* ---------- เริ่มต้น: โหลดเส้นทางที่เก็บไว้ ---------- */
+(async () => {
+  try {
+    tracks = (await trackDB.all()).sort((a, b) => b.id - a.id);
+  } catch (err) {
+    console.error('IndexedDB', err);
+    $('btnRecord').classList.add('hidden');
+    return;
+  }
+  // มีเส้นทางที่บันทึกค้างไว้ (แอปถูกปิดระหว่างบันทึก) → กู้กลับมาในสถานะพัก
+  const active = tracks.find(t => t.active);
+  if (active) {
+    const segs = active.segments.filter(s => s.length);
+    rec = { track: active, paused: true, lastPt: segs.length ? segs[segs.length - 1].slice(-1)[0] : null, runStart: 0, lastSave: 0 };
+    toast('มีเส้นทางที่บันทึกค้างไว้ — กด ▶ เพื่อบันทึกต่อ หรือ ■ เพื่อจบ');
+  }
+  updateRecUI();
+  renderTrackMap();
+  renderTrackList();
+})();

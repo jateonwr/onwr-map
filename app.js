@@ -35,6 +35,8 @@ const FIELD_LABELS = {
   prov: 'จังหวัด', area_rai: 'พื้นที่ (ไร่)',
   // คลอง กทม.
   detail: 'รายละเอียด', kind: 'ประเภท',
+  // แนวคลองระบายน้ำ (โครงการ)
+  width_m: 'ความกว้างแนวเขต (ม.)', n_prov: 'จังหวัดที่ผ่าน', n_amp: 'อำเภอที่ผ่าน', n_tam: 'ตำบลที่ผ่าน',
   // แหล่งน้ำขนาดใหญ่ / ขนาดกลาง
   name: 'ชื่อ', tambol: 'ตำบล', amphoe: 'อำเภอ', province: 'จังหวัด', storage: 'ความจุ (ล้าน ลบ.ม.)',
   agency: 'หน่วยงาน', Basin22: 'ลุ่มน้ำ', ONWR_Reg: 'สทนช. ภาค', REMARK: 'หมายเหตุ',
@@ -223,6 +225,26 @@ const OVERLAYS = [
                  'line-width': ['interpolate', ['linear'], ['zoom'], 6, 1, 10, 2, 15, 4] } },
     ],
     opacityProps: [['line', 'line-opacity', 1]],
+  },
+  {
+    // แนวคลองระบายน้ำ (โครงการ) จาก DigitizeRiver_MapToKML.kmz: แนวเขตคลอง ~180 ม. + จุดต้นคลอง/กลางทาง/ปลายคลอง
+    // ตำบลที่ผ่าน (คำนวณจาก tha_admin3) เน้นได้จากแผงข้อมูล (canal-project-tambons.geojson)
+    id: 'canal-project', name: 'แนวคลองระบายน้ำ (โครงการ)', url: 'data/canal-project.geojson', visible: true, opacity: 0.55,
+    icon: 'area', swatch: '#ea580c', outline: '#9a3412', titleField: 'name',
+    labels: true, labelClass: 'canal-label', labelMinZoom: 7, labelAnchor: 'left', labelOffset: [10, 0],
+    countText: data => { const p = (data.features.find(f => f.properties.part === 'corridor') || {}).properties || {}; return `ยาว ~${p.length_km} กม. · ผ่าน ${p.n_prov} จังหวัด ${p.n_amp} อำเภอ ${p.n_tam} ตำบล`; },
+    extraSources: { 'canal-tambons': () => canalTambonOn ? canalTambonFC : emptyFC() },
+    layers: (src, op) => [
+      { id: 'canal-tambons-fill', type: 'fill', source: 'canal-tambons', paint: { 'fill-color': '#fdba74', 'fill-opacity': 0.28 } },
+      { id: 'canal-tambons-line', type: 'line', source: 'canal-tambons', layout: { 'line-join': 'round' },
+        paint: { 'line-color': '#c2410c', 'line-width': ['interpolate', ['linear'], ['zoom'], 8, 0.8, 12, 1.6], 'line-dasharray': [2, 1.5] } },
+      { id: `${src}-fill`, type: 'fill', source: src, filter: ['==', ['get', 'part'], 'corridor'], paint: { 'fill-color': '#ea580c', 'fill-opacity': op } },
+      { id: `${src}-line`, type: 'line', source: src, filter: ['==', ['get', 'part'], 'corridor'], layout: { 'line-join': 'round' },
+        paint: { 'line-color': '#9a3412', 'line-width': ['interpolate', ['linear'], ['zoom'], 7, 1, 11, 1.8, 14, 2.5] } },
+      { id: `${src}-pt`, type: 'circle', source: src, filter: ['==', ['get', 'part'], 'point'],
+        paint: { 'circle-color': '#ea580c', 'circle-radius': CIRCLE_RADIUS_BY_ZOOM, 'circle-stroke-color': '#ffffff', 'circle-stroke-width': CIRCLE_STROKE_BY_ZOOM } },
+    ],
+    opacityProps: [['fill', 'fill-opacity', 1]],
   },
   {
     // คลอง กทม. (ฝั่งตะวันออก) 57 สาย (Stream_คลองจุดสูบน้ำ.shp) · ฟ้าเข้มกว่าลำน้ำสาขา เส้นหนากว่าเล็กน้อย
@@ -642,7 +664,7 @@ function pickRiverLabel(group, z, inside) {
  *  ไอคอนทุกจุดยังแสดงเสมอ
  * ============================================================ */
 const LABEL_PRIORITY = {   // มาก = สำคัญกว่า (ได้วางก่อน)
-  visits: 100, stations: 90, 'water-other': 80, 'water-l': 70, tung: 60, 'streams-main': 50, provinces: 40, basins: 35,
+  visits: 100, 'canal-project': 95, stations: 90, 'water-other': 80, 'water-l': 70, tung: 60, 'streams-main': 50, provinces: 40, basins: 35,
 };
 const POINT_ICON_LAYERS = ['visits', 'stations', 'water-other'];
 
@@ -771,6 +793,7 @@ const LABEL_STYLES = {
   'river-label': { size: 14, weight: 600, color: '#1d4ed8', halo: 2 },
   'stn-label':   { size: 13, weight: 700, color: '#9a3412', sub: { size: 11, weight: 600 }, halo: 3, family: 'system-ui, sans-serif' },
   'visit-label': { size: 13, weight: 700, color: '#991b1b', halo: 2 },
+  'canal-label': { size: 13, weight: 700, color: '#9a3412', halo: 2 },
   'prov-label':  { size: 13, weight: 600, color: '#111827', halo: 1.5, opacity: 0.85 },
   'basin-label': { size: 14, weight: 700, color: '#0f766e', halo: 2 },
 };
@@ -885,7 +908,7 @@ $('basemapList').addEventListener('click', e => {
   activeBase = btn.dataset.base;
   store.set('basemap', activeBase);
   BASEMAPS.forEach(b => map.setLayoutProperty(`base-${b.id}`, 'visibility', b.id === activeBase ? 'visible' : 'none'));
-  document.querySelectorAll('.tung-label, .water-label, .stn-label, .river-label, .prov-label, .visit-label, .basin-label').forEach(el => {
+  document.querySelectorAll('.tung-label, .water-label, .stn-label, .river-label, .prov-label, .visit-label, .basin-label, .canal-label').forEach(el => {
     el.style.color = activeBase === 'satellite' ? '#fff' : '';
     el.style.textShadow = activeBase === 'satellite' ? '0 0 3px #000, 0 0 3px #000' : '';
   });
@@ -1218,6 +1241,35 @@ async function setFloodDate(key) {
   renderFloodPanel();
   if (!$('floodSummary').classList.contains('hidden')) setFloodSummary(true);
 }
+
+/* ---------- แนวคลองระบายน้ำ (โครงการ): รายชื่อพื้นที่ที่ผ่าน + เน้นตำบลที่ผ่าน ---------- */
+let canalTambonFC = emptyFC(), canalTambonOn = false;
+async function setCanalTambons(on) {
+  canalTambonOn = on;
+  if (on && !canalTambonFC.features.length) {
+    try { canalTambonFC = await (await fetch('data/canal-project-tambons.geojson', { cache: 'no-cache' })).json(); }
+    catch (err) { console.error('canal tambons', err); toast('โหลดตำบลที่คลองผ่านไม่สำเร็จ'); canalTambonOn = false; return; }
+  }
+  const fc = canalTambonOn ? canalTambonFC : emptyFC();
+  map.getSource('canal-tambons')?.setData(fc);
+  if (typeof ds !== 'undefined' && ds.pm) ds.pm.getSource('canal-tambons')?.setData(fc);
+  const b = $('btnCanalTambons');
+  if (b) b.textContent = canalTambonOn ? 'ซ่อนตำบลที่คลองผ่าน' : 'เน้นตำบลที่คลองผ่านบนแผนที่';
+}
+infoExtras.push((o, f) => {
+  if (o.id !== 'canal-project' || f.properties.part !== 'corridor') return '';
+  let areas = [];
+  try { areas = JSON.parse(f.properties.areas || '[]'); } catch {}
+  const list = areas.map(p => `<div class="py-1.5"><div class="font-medium">จ.${escapeHtml(p.n)}</div>
+      ${p.a.map(a => `<div class="pl-3 text-gray-600"><span class="text-gray-800">อ.${escapeHtml(a.n)}</span> · ${a.t.map(t => 'ต.' + escapeHtml(t)).join(', ')}</div>`).join('')}</div>`).join('');
+  return `<div class="py-3">
+      <button id="btnCanalTambons" class="w-full h-10 rounded-xl bg-orange-50 text-orange-800 text-sm font-medium active:bg-orange-100">${canalTambonOn ? 'ซ่อนตำบลที่คลองผ่าน' : 'เน้นตำบลที่คลองผ่านบนแผนที่'}</button>
+      <div class="mt-3 text-xs font-semibold text-gray-500">พื้นที่ที่แนวคลองผ่าน (เรียงจากต้นคลองลงใต้)</div>
+      <div class="text-[13px] divide-y divide-gray-100">${list}</div>
+      <div class="mt-2 text-[11px] text-gray-400">คำนวณจากแนวเขตคลองซ้อนกับขอบเขตตำบล (tha_admin3)</div>
+    </div>`;
+});
+$('infoBody').addEventListener('click', e => { if (e.target.closest('#btnCanalTambons')) setCanalTambons(!canalTambonOn); });
 
 /* ============================================================
  *  แผง (sheet) เปิด/ปิด + ลากลงเพื่อปิด
