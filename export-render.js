@@ -22,7 +22,7 @@ const TUNG_ORDER = ['บางระกำ', 'เชียงราก', 'ฝั
 const LEGEND_ORDER = ['visits', 'photos', 'canal-project', 'stations', 'water-other', 'streams-main', 'streams-sub', 'canals-bkk', 'canals-bkk-east', 'water-l', 'water-m', 'flood', 'tung', 'provinces', 'amphoes', 'tambons', 'basins'];
 const LABEL_CLASS_NAMES = {
   'tung-label': 'ชื่อทุ่งรับน้ำ', 'water-label': 'ชื่อเขื่อน / อาคารบังคับน้ำ', 'river-label': 'ชื่อแม่น้ำ',
-  'stn-label': 'รหัสสถานี', 'visit-label': 'จุดลงพื้นที่', 'canal-label': 'จุดแนวคลอง (โครงการ)', 'prov-label': 'ชื่อจังหวัด', 'basin-label': 'ชื่อลุ่มน้ำหลัก',
+  'stn-label': 'รหัสสถานี', 'visit-label': 'จุดลงพื้นที่', 'canal-label': 'จุดแนวคลองระบายน้ำ', 'prov-label': 'ชื่อจังหวัด', 'basin-label': 'ชื่อลุ่มน้ำหลัก',
 };
 const BOX_NAMES = { title: 'ชื่อแผนที่', logo: 'โลโก้', table: 'ตาราง', legend: 'สัญลักษณ์', north: 'ลูกศรทิศเหนือ', scalebar: 'มาตราส่วน' };
 // คอลัมน์ตาราง 11 ทุ่ง (w = มม. บน A2 ที่ขนาดกล่อง 1×) — "name" แสดงเสมอ

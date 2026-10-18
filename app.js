@@ -229,15 +229,20 @@ const OVERLAYS = [
   {
     // แนวคลองระบายน้ำ (โครงการ) จาก DigitizeRiver_MapToKML.kmz: แนวเขตคลอง ~180 ม. + จุดต้นคลอง/กลางทาง/ปลายคลอง
     // ตำบลที่ผ่าน (คำนวณจาก tha_admin3) เน้นได้จากแผงข้อมูล (canal-project-tambons.geojson)
-    id: 'canal-project', name: 'แนวคลองระบายน้ำ (โครงการ)', url: 'data/canal-project.geojson', visible: true, opacity: 0.55,
+    id: 'canal-project', name: 'แนวคลองระบายน้ำ', url: 'data/canal-project.geojson', visible: true, opacity: 0.55,
     icon: 'line-thick', swatch: '#172554', titleField: 'name',
     labels: true, labelClass: 'canal-label', labelMinZoom: 7, labelAnchor: 'left', labelOffset: [10, 0],
-    countText: data => { const p = (data.features.find(f => f.properties.part === 'corridor') || {}).properties || {}; return `ยาว ~${p.length_km} กม. · ผ่าน ${p.n_prov} จังหวัด ${p.n_amp} อำเภอ ${p.n_tam} ตำบล`; },
-    extraSources: { 'canal-tambons': () => canalTambonOn ? canalTambonFC : emptyFC() },
+    countText: () => '',
+    // ขอบเขตที่แนวคลองผ่าน: เลือกเปิด ตำบล / อำเภอ / จังหวัด ได้ในการ์ดของชั้นนี้ (canal-project-areas.geojson, lv = t/a/p)
+    extraSources: { 'canal-areas': () => canalAreasFC() },
     layers: (src, op) => [
-      { id: 'canal-tambons-fill', type: 'fill', source: 'canal-tambons', paint: { 'fill-color': '#fdba74', 'fill-opacity': 0.28 } },
-      { id: 'canal-tambons-line', type: 'line', source: 'canal-tambons', layout: { 'line-join': 'round' },
+      { id: 'canal-areas-fill', type: 'fill', source: 'canal-areas', filter: ['==', ['get', 'lv'], 't'], paint: { 'fill-color': '#fdba74', 'fill-opacity': 0.28 } },
+      { id: 'canal-areas-t', type: 'line', source: 'canal-areas', filter: ['==', ['get', 'lv'], 't'], layout: { 'line-join': 'round' },
         paint: { 'line-color': '#c2410c', 'line-width': ['interpolate', ['linear'], ['zoom'], 8, 0.8, 12, 1.6], 'line-dasharray': [2, 1.5] } },
+      { id: 'canal-areas-a', type: 'line', source: 'canal-areas', filter: ['==', ['get', 'lv'], 'a'], layout: { 'line-join': 'round' },
+        paint: { 'line-color': '#ea580c', 'line-width': ['interpolate', ['linear'], ['zoom'], 6, 1.5, 10, 2.5, 14, 3.5] } },
+      { id: 'canal-areas-p', type: 'line', source: 'canal-areas', filter: ['==', ['get', 'lv'], 'p'], layout: { 'line-join': 'round' },
+        paint: { 'line-color': '#7c2d12', 'line-width': ['interpolate', ['linear'], ['zoom'], 5, 2, 9, 3.5, 13, 5] } },
       { id: `${src}-fill`, type: 'fill', source: src, filter: ['==', ['get', 'part'], 'corridor'], paint: { 'fill-color': '#172554', 'fill-opacity': op } },
       { id: `${src}-line`, type: 'line', source: src, filter: ['==', ['get', 'part'], 'corridor'], layout: { 'line-join': 'round' },
         paint: { 'line-color': '#172554', 'line-width': ['interpolate', ['linear'], ['zoom'], 5, 3, 8, 4.5, 11, 6, 14, 8] } },   // เส้นหนา: ซูมออกเห็นเป็นแนวเดียวชัด ๆ
@@ -885,7 +890,7 @@ function renderLayerPanel() {
               <select data-flood-date aria-label="วันที่ข้อมูลน้ำท่วม" class="flex-none h-6 appearance-none rounded-md border border-gray-300 bg-white bg-no-repeat pl-1 pr-3.5 text-[12px] font-normal" style="background-image:url('data:image/svg+xml;utf8,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22 fill=%22%236b7280%22><path d=%22M7.4 8.6 12 13.2l4.6-4.6L18 10l-6 6-6-6z%22/></svg>');background-size:14px;background-position:right 1px center">
                 ${FLOOD_DATES.map(d => `<option value="${d.key}" ${d.key === floodDate.key ? 'selected' : ''}>${d.label}</option>`).join('')}
               </select></div>` : `<div class="font-medium">${o.name}</div>`}
-            <div class="text-xs text-gray-500">${failed ? 'โหลดไม่สำเร็จ' : o.countText ? o.countText(st.data) : `${st.data.features.length} รายการ`}${o.lazy && !st.data ? ' · โหลดเมื่อเปิด' : ''}</div>
+            ${(() => { const t = failed ? 'โหลดไม่สำเร็จ' : (o.countText ? o.countText(st.data) : `${st.data.features.length} รายการ`) + (o.lazy && !st.data ? ' · โหลดเมื่อเปิด' : ''); return t ? `<div class="text-xs text-gray-500">${t}</div>` : ''; })()}
             ${!failed && layerNotes[o.id] ? layerNotes[o.id]() : ''}
           </div>
           <button data-fit="${o.id}" aria-label="ซูมไปที่${o.name}" class="w-10 h-10 rounded-full grid place-items-center active:bg-gray-100 ${failed ? 'hidden' : ''}">
@@ -1243,19 +1248,28 @@ async function setFloodDate(key) {
 }
 
 /* ---------- แนวคลองระบายน้ำ (โครงการ): รายชื่อพื้นที่ที่ผ่าน + เน้นตำบลที่ผ่าน ---------- */
-let canalTambonFC = emptyFC(), canalTambonOn = false;
-async function setCanalTambons(on) {
-  canalTambonOn = on;
-  if (on && !canalTambonFC.features.length) {
-    try { canalTambonFC = await (await fetch('data/canal-project-tambons.geojson', { cache: 'no-cache' })).json(); }
-    catch (err) { console.error('canal tambons', err); toast('โหลดตำบลที่คลองผ่านไม่สำเร็จ'); canalTambonOn = false; return; }
+const CANAL_LV = [['t', 'ตำบล'], ['a', 'อำเภอ'], ['p', 'จังหวัด']];
+let canalAreasData = null, canalLv = new Set(store.get('canal:lv', []));
+const canalAreasFC = () => !canalAreasData || !canalLv.size ? emptyFC()
+  : { type: 'FeatureCollection', features: canalAreasData.features.filter(f => canalLv.has(f.properties.lv)) };
+async function setCanalLv(lv, on) {
+  on ? canalLv.add(lv) : canalLv.delete(lv);
+  store.set('canal:lv', [...canalLv]);
+  if (canalLv.size && !canalAreasData) {
+    try { canalAreasData = await (await fetch('data/canal-project-areas.geojson', { cache: 'no-cache' })).json(); }
+    catch (err) { console.error('canal areas', err); toast('โหลดขอบเขตที่คลองผ่านไม่สำเร็จ'); return; }
   }
-  const fc = canalTambonOn ? canalTambonFC : emptyFC();
-  map.getSource('canal-tambons')?.setData(fc);
-  if (typeof ds !== 'undefined' && ds.pm) ds.pm.getSource('canal-tambons')?.setData(fc);
-  const b = $('btnCanalTambons');
-  if (b) b.textContent = canalTambonOn ? 'ซ่อนตำบลที่คลองผ่าน' : 'เน้นตำบลที่คลองผ่านบนแผนที่';
+  const fc = canalAreasFC();
+  map.getSource('canal-areas')?.setData(fc);
+  if (typeof ds !== 'undefined' && ds.pm) ds.pm.getSource('canal-areas')?.setData(fc);
+  document.querySelectorAll('[data-canal-lv]').forEach(el => { el.checked = canalLv.has(el.dataset.canalLv); });
 }
+if (canalLv.size) onMapReady.push(() => setCanalLv([...canalLv][0], true));   // เปิดค้างไว้จากครั้งก่อน
+/* การ์ดในแผงชั้นข้อมูล: เปิด/ปิดขอบเขตที่แนวคลองผ่าน */
+layerNotes['canal-project'] = () => `<div class="mt-1 flex items-center gap-x-3 gap-y-1 flex-wrap text-[13px] text-gray-700">
+    <span class="text-xs text-gray-500">ขอบเขตที่ผ่าน</span>
+    ${CANAL_LV.map(([k, n]) => `<label class="flex items-center gap-1 cursor-pointer"><input type="checkbox" data-canal-lv="${k}" ${canalLv.has(k) ? 'checked' : ''} class="w-4 h-4 accent-orange-600">${n}</label>`).join('')}
+  </div>`;
 infoExtras.push((o, f) => {
   if (o.id !== 'canal-project' || f.properties.part !== 'corridor') return '';
   let areas = [];
@@ -1263,13 +1277,14 @@ infoExtras.push((o, f) => {
   const list = areas.map(p => `<div class="py-1.5"><div class="font-medium">จ.${escapeHtml(p.n)}</div>
       ${p.a.map(a => `<div class="pl-3 text-gray-600"><span class="text-gray-800">อ.${escapeHtml(a.n)}</span> · ${a.t.map(t => 'ต.' + escapeHtml(t)).join(', ')}</div>`).join('')}</div>`).join('');
   return `<div class="py-3">
-      <button id="btnCanalTambons" class="w-full h-10 rounded-xl bg-orange-50 text-orange-800 text-sm font-medium active:bg-orange-100">${canalTambonOn ? 'ซ่อนตำบลที่คลองผ่าน' : 'เน้นตำบลที่คลองผ่านบนแผนที่'}</button>
+      <div class="flex items-center gap-3 flex-wrap text-sm"><span class="text-xs text-gray-500">แสดงขอบเขตที่ผ่าน</span>
+        ${CANAL_LV.map(([k, n]) => `<label class="flex items-center gap-1.5 cursor-pointer"><input type="checkbox" data-canal-lv="${k}" ${canalLv.has(k) ? 'checked' : ''} class="w-4 h-4 accent-orange-600">${n}</label>`).join('')}</div>
       <div class="mt-3 text-xs font-semibold text-gray-500">พื้นที่ที่แนวคลองผ่าน (เรียงจากต้นคลองลงใต้)</div>
       <div class="text-[13px] divide-y divide-gray-100">${list}</div>
       <div class="mt-2 text-[11px] text-gray-400">คำนวณจากแนวเขตคลองซ้อนกับขอบเขตตำบล (tha_admin3)</div>
     </div>`;
 });
-$('infoBody').addEventListener('click', e => { if (e.target.closest('#btnCanalTambons')) setCanalTambons(!canalTambonOn); });
+document.addEventListener('change', e => { const el = e.target.closest('[data-canal-lv]'); if (el) setCanalLv(el.dataset.canalLv, el.checked); });
 
 /* ============================================================
  *  แผง (sheet) เปิด/ปิด + ลากลงเพื่อปิด
