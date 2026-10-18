@@ -236,13 +236,13 @@ const OVERLAYS = [
     // ขอบเขตที่แนวคลองผ่าน: เลือกเปิด ตำบล / อำเภอ / จังหวัด ได้ในการ์ดของชั้นนี้ (canal-project-areas.geojson, lv = t/a/p)
     extraSources: { 'canal-areas': () => canalAreasFC() },
     layers: (src, op) => [
-      { id: 'canal-areas-fill', type: 'fill', source: 'canal-areas', filter: ['==', ['get', 'lv'], 't'], paint: { 'fill-color': '#fdba74', 'fill-opacity': 0.28 } },
+      { id: 'canal-areas-fill', type: 'fill', source: 'canal-areas', filter: ['==', ['get', 'lv'], 't'], paint: { 'fill-color': '#fde047', 'fill-opacity': 0.3 } },
       { id: 'canal-areas-t', type: 'line', source: 'canal-areas', filter: ['==', ['get', 'lv'], 't'], layout: { 'line-join': 'round' },
-        paint: { 'line-color': '#c2410c', 'line-width': ['interpolate', ['linear'], ['zoom'], 8, 0.8, 12, 1.6], 'line-dasharray': [2, 1.5] } },
+        paint: { 'line-color': '#eab308', 'line-width': ['interpolate', ['linear'], ['zoom'], 8, 1, 12, 2], 'line-dasharray': [2, 1.5] } },
       { id: 'canal-areas-a', type: 'line', source: 'canal-areas', filter: ['==', ['get', 'lv'], 'a'], layout: { 'line-join': 'round' },
-        paint: { 'line-color': '#ea580c', 'line-width': ['interpolate', ['linear'], ['zoom'], 6, 1.5, 10, 2.5, 14, 3.5] } },
+        paint: { 'line-color': '#facc15', 'line-width': ['interpolate', ['linear'], ['zoom'], 6, 2, 10, 3, 14, 4] } },
       { id: 'canal-areas-p', type: 'line', source: 'canal-areas', filter: ['==', ['get', 'lv'], 'p'], layout: { 'line-join': 'round' },
-        paint: { 'line-color': '#7c2d12', 'line-width': ['interpolate', ['linear'], ['zoom'], 5, 2, 9, 3.5, 13, 5] } },
+        paint: { 'line-color': '#eab308', 'line-width': ['interpolate', ['linear'], ['zoom'], 5, 3, 9, 4.5, 13, 6] } },
       { id: `${src}-fill`, type: 'fill', source: src, filter: ['==', ['get', 'part'], 'corridor'], paint: { 'fill-color': '#172554', 'fill-opacity': op } },
       { id: `${src}-line`, type: 'line', source: src, filter: ['==', ['get', 'part'], 'corridor'], layout: { 'line-join': 'round' },
         paint: { 'line-color': '#172554', 'line-width': ['interpolate', ['linear'], ['zoom'], 5, 3, 8, 4.5, 11, 6, 14, 8] } },   // เส้นหนา: ซูมออกเห็นเป็นแนวเดียวชัด ๆ
@@ -1268,7 +1268,7 @@ if (canalLv.size) onMapReady.push(() => setCanalLv([...canalLv][0], true));   //
 /* การ์ดในแผงชั้นข้อมูล: เปิด/ปิดขอบเขตที่แนวคลองผ่าน */
 layerNotes['canal-project'] = () => `<div class="mt-1 flex items-center gap-x-3 gap-y-1 flex-wrap text-[13px] text-gray-700">
     <span class="text-xs text-gray-500">ขอบเขตที่ผ่าน</span>
-    ${CANAL_LV.map(([k, n]) => `<label class="flex items-center gap-1 cursor-pointer"><input type="checkbox" data-canal-lv="${k}" ${canalLv.has(k) ? 'checked' : ''} class="w-4 h-4 accent-orange-600">${n}</label>`).join('')}
+    ${CANAL_LV.map(([k, n]) => `<label class="flex items-center gap-1 cursor-pointer"><input type="checkbox" data-canal-lv="${k}" ${canalLv.has(k) ? 'checked' : ''} class="w-4 h-4 accent-yellow-500">${n}</label>`).join('')}
   </div>`;
 infoExtras.push((o, f) => {
   if (o.id !== 'canal-project' || f.properties.part !== 'corridor') return '';
@@ -1278,7 +1278,7 @@ infoExtras.push((o, f) => {
       ${p.a.map(a => `<div class="pl-3 text-gray-600"><span class="text-gray-800">อ.${escapeHtml(a.n)}</span> · ${a.t.map(t => 'ต.' + escapeHtml(t)).join(', ')}</div>`).join('')}</div>`).join('');
   return `<div class="py-3">
       <div class="flex items-center gap-3 flex-wrap text-sm"><span class="text-xs text-gray-500">แสดงขอบเขตที่ผ่าน</span>
-        ${CANAL_LV.map(([k, n]) => `<label class="flex items-center gap-1.5 cursor-pointer"><input type="checkbox" data-canal-lv="${k}" ${canalLv.has(k) ? 'checked' : ''} class="w-4 h-4 accent-orange-600">${n}</label>`).join('')}</div>
+        ${CANAL_LV.map(([k, n]) => `<label class="flex items-center gap-1.5 cursor-pointer"><input type="checkbox" data-canal-lv="${k}" ${canalLv.has(k) ? 'checked' : ''} class="w-4 h-4 accent-yellow-500">${n}</label>`).join('')}</div>
       <div class="mt-3 text-xs font-semibold text-gray-500">พื้นที่ที่แนวคลองผ่าน (เรียงจากต้นคลองลงใต้)</div>
       <div class="text-[13px] divide-y divide-gray-100">${list}</div>
       <div class="mt-2 text-[11px] text-gray-400">คำนวณจากแนวเขตคลองซ้อนกับขอบเขตตำบล (tha_admin3)</div>
