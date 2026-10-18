@@ -1249,7 +1249,7 @@ async function setFloodDate(key) {
 
 /* ---------- แนวคลองระบายน้ำ (โครงการ): รายชื่อพื้นที่ที่ผ่าน + เน้นตำบลที่ผ่าน ---------- */
 const CANAL_LV = [['t', 'ตำบล'], ['a', 'อำเภอ'], ['p', 'จังหวัด']];
-let canalAreasData = null, canalLv = new Set(store.get('canal:lv', []));
+let canalAreasData = null, canalLv = new Set(store.get('canal:lv', ['t']));   // ค่าเริ่มต้น: แสดงตำบล
 const canalAreasFC = () => !canalAreasData || !canalLv.size ? emptyFC()
   : { type: 'FeatureCollection', features: canalAreasData.features.filter(f => canalLv.has(f.properties.lv)) };
 async function setCanalLv(lv, on) {
