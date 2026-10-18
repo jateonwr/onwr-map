@@ -155,6 +155,7 @@ function applyExportStyle(m, settings, U, refZoom, { minPx = 0 } = {}) {
         if (paint[prop] != null) m.setPaintProperty(def.id, prop, Math.max(minPx, numAt(paint[prop], refZoom) * k * ls.width));
       }
       if (layout['icon-size'] != null) m.setLayoutProperty(def.id, 'icon-size', Math.max(minPx ? 0.3 : 0, numAt(layout['icon-size'], refZoom) * k * ls.iconSize));
+      if (def.source !== o.id && !String(def.source).startsWith('detail-')) continue;   // ชั้นเสริมจาก source อื่น (เช่น ตำบลที่คลองผ่าน, อำเภอที่มีจุดลงพื้นที่) คงสีเดิม
       if (paint['fill-color'] != null && ls.fillColor) m.setPaintProperty(def.id, 'fill-color', ls.fillColor);
       if (paint['line-color'] != null && ls.lineColor && !def.id.endsWith('-casing')) m.setPaintProperty(def.id, 'line-color', ls.lineColor);
       if (o.lineStyle && def.type === 'line') m.setPaintProperty(def.id, 'line-dasharray', ls.dash === 'dash' ? LINE_DASH : null);

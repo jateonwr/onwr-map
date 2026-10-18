@@ -230,7 +230,7 @@ const OVERLAYS = [
     // แนวคลองระบายน้ำ (โครงการ) จาก DigitizeRiver_MapToKML.kmz: แนวเขตคลอง ~180 ม. + จุดต้นคลอง/กลางทาง/ปลายคลอง
     // ตำบลที่ผ่าน (คำนวณจาก tha_admin3) เน้นได้จากแผงข้อมูล (canal-project-tambons.geojson)
     id: 'canal-project', name: 'แนวคลองระบายน้ำ (โครงการ)', url: 'data/canal-project.geojson', visible: true, opacity: 0.55,
-    icon: 'area', swatch: '#ea580c', outline: '#9a3412', titleField: 'name',
+    icon: 'line-thick', swatch: '#172554', titleField: 'name',
     labels: true, labelClass: 'canal-label', labelMinZoom: 7, labelAnchor: 'left', labelOffset: [10, 0],
     countText: data => { const p = (data.features.find(f => f.properties.part === 'corridor') || {}).properties || {}; return `ยาว ~${p.length_km} กม. · ผ่าน ${p.n_prov} จังหวัด ${p.n_amp} อำเภอ ${p.n_tam} ตำบล`; },
     extraSources: { 'canal-tambons': () => canalTambonOn ? canalTambonFC : emptyFC() },
@@ -238,11 +238,11 @@ const OVERLAYS = [
       { id: 'canal-tambons-fill', type: 'fill', source: 'canal-tambons', paint: { 'fill-color': '#fdba74', 'fill-opacity': 0.28 } },
       { id: 'canal-tambons-line', type: 'line', source: 'canal-tambons', layout: { 'line-join': 'round' },
         paint: { 'line-color': '#c2410c', 'line-width': ['interpolate', ['linear'], ['zoom'], 8, 0.8, 12, 1.6], 'line-dasharray': [2, 1.5] } },
-      { id: `${src}-fill`, type: 'fill', source: src, filter: ['==', ['get', 'part'], 'corridor'], paint: { 'fill-color': '#ea580c', 'fill-opacity': op } },
+      { id: `${src}-fill`, type: 'fill', source: src, filter: ['==', ['get', 'part'], 'corridor'], paint: { 'fill-color': '#172554', 'fill-opacity': op } },
       { id: `${src}-line`, type: 'line', source: src, filter: ['==', ['get', 'part'], 'corridor'], layout: { 'line-join': 'round' },
-        paint: { 'line-color': '#9a3412', 'line-width': ['interpolate', ['linear'], ['zoom'], 7, 1, 11, 1.8, 14, 2.5] } },
+        paint: { 'line-color': '#172554', 'line-width': ['interpolate', ['linear'], ['zoom'], 5, 3, 8, 4.5, 11, 6, 14, 8] } },   // เส้นหนา: ซูมออกเห็นเป็นแนวเดียวชัด ๆ
       { id: `${src}-pt`, type: 'circle', source: src, filter: ['==', ['get', 'part'], 'point'],
-        paint: { 'circle-color': '#ea580c', 'circle-radius': CIRCLE_RADIUS_BY_ZOOM, 'circle-stroke-color': '#ffffff', 'circle-stroke-width': CIRCLE_STROKE_BY_ZOOM } },
+        paint: { 'circle-color': '#172554', 'circle-radius': CIRCLE_RADIUS_BY_ZOOM, 'circle-stroke-color': '#ffffff', 'circle-stroke-width': CIRCLE_STROKE_BY_ZOOM } },
     ],
     opacityProps: [['fill', 'fill-opacity', 1]],
   },
@@ -305,7 +305,7 @@ const OVERLAYS = [
     // อำเภอที่มีจุดลงพื้นที่: ขอบสีเหลืองเข้ม ไม่มีพื้น (คำนวณจากตำแหน่งจุด → updateVisitAmphoes)
     extraSources: { 'visit-amphoes': () => visitAmphoeFC },
     layers: (src, op) => [
-      { id: 'visit-amphoes-fill', type: 'fill', source: 'visit-amphoes', paint: { 'fill-color': '#ca8a04', 'fill-opacity': 0.3 } },
+      { id: 'visit-amphoes-fill', type: 'fill', source: 'visit-amphoes', under: 'tung-fill', paint: { 'fill-color': '#ca8a04', 'fill-opacity': 0.3 } },   // พื้นอยู่ใต้ทุกชั้น ไม่ทำให้สีเส้นอื่นหม่น
       { id: 'visit-amphoes-line', type: 'line', source: 'visit-amphoes', layout: { 'line-join': 'round', 'line-cap': 'round' },
         paint: { 'line-color': '#ca8a04', 'line-width': ['interpolate', ['linear'], ['zoom'], 5, 2, 8, 3, 11, 4.5, 14, 6] } },
       { id: `${src}-icon`, type: 'symbol', source: src,
@@ -462,9 +462,9 @@ function addOverlayLayers(m, { onlyVisible = false, onlyIds = null } = {}) {
     const next = OVERLAYS.slice(i + 1).map(x => x.layers(x.id, 1)[0].id).find(id => m.getLayer(id));
     m.addSource(o.id, { type: 'geojson', data: st.data });
     for (const [sid, fn] of Object.entries(o.extraSources || {})) if (!m.getSource(sid)) m.addSource(sid, { type: 'geojson', data: fn() });
-    for (const l of o.layers(o.id, st.opacity)) {
+    for (const { under, ...l } of o.layers(o.id, st.opacity)) {
       l.layout = { ...(l.layout || {}), visibility: st.visible ? 'visible' : 'none' };
-      m.addLayer(l, next);
+      m.addLayer(l, under && m.getLayer(under) ? under : next);
     }
   }
 }
@@ -573,9 +573,9 @@ map.on('load', async () => {
     if (!map.getSource(o.id)) continue;
     const st = overlayState[o.id];
     for (const [sid, fn] of Object.entries(o.extraSources || {})) if (!map.getSource(sid)) map.addSource(sid, { type: 'geojson', data: fn() });
-    for (const l of o.layers(o.id, st.opacity)) {
+    for (const { under, ...l } of o.layers(o.id, st.opacity)) {   // under = วางไว้ใต้ layer นั้น (ถ้ามี)
       l.layout = { ...(l.layout || {}), visibility: st.visible ? 'visible' : 'none' };
-      map.addLayer(l);
+      map.addLayer(l, under && map.getLayer(under) ? under : undefined);
     }
     if (o.labels) createLabels(o);
   }
@@ -793,7 +793,7 @@ const LABEL_STYLES = {
   'river-label': { size: 14, weight: 600, color: '#1d4ed8', halo: 2 },
   'stn-label':   { size: 13, weight: 700, color: '#9a3412', sub: { size: 11, weight: 600 }, halo: 3, family: 'system-ui, sans-serif' },
   'visit-label': { size: 13, weight: 700, color: '#991b1b', halo: 2 },
-  'canal-label': { size: 13, weight: 700, color: '#9a3412', halo: 2 },
+  'canal-label': { size: 13, weight: 700, color: '#172554', halo: 2 },
   'prov-label':  { size: 13, weight: 600, color: '#111827', halo: 1.5, opacity: 0.85 },
   'basin-label': { size: 14, weight: 700, color: '#0f766e', halo: 2 },
 };
