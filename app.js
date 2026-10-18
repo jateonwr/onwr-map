@@ -1266,8 +1266,8 @@ async function setCanalLv(lv, on) {
 }
 if (canalLv.size) onMapReady.push(() => setCanalLv([...canalLv][0], true));   // เปิดค้างไว้จากครั้งก่อน
 /* การ์ดในแผงชั้นข้อมูล: เปิด/ปิดขอบเขตที่แนวคลองผ่าน */
-layerNotes['canal-project'] = () => `<div class="mt-1 flex items-center gap-x-3 gap-y-1 flex-wrap text-[13px] text-gray-700">
-    <span class="text-xs text-gray-500">ขอบเขตที่ผ่าน</span>
+layerNotes['canal-project'] = () => `<div class="mt-0.5 text-xs text-gray-500">ขอบเขต</div>
+  <div class="mt-0.5 flex items-center gap-x-3 whitespace-nowrap text-[13px] text-gray-700">
     ${CANAL_LV.map(([k, n]) => `<label class="flex items-center gap-1 cursor-pointer"><input type="checkbox" data-canal-lv="${k}" ${canalLv.has(k) ? 'checked' : ''} class="w-4 h-4 accent-yellow-500">${n}</label>`).join('')}
   </div>`;
 infoExtras.push((o, f) => {
