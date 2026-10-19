@@ -1358,8 +1358,8 @@ async function identifyClick(e) {
   if (!t) { pop.setHTML('<div class="text-sm">นอกเขตประเทศไทย / ไม่พบข้อมูล</div>'); map.getSource('identify-shape')?.setData(emptyFC()); return; }
   const p = t.properties, bkk = p.pc === 'TH10';
   pop.setHTML(`<div class="leading-snug">
-      <div class="font-semibold text-[15px]">${bkk ? 'เขต' : 'อ.'}${escapeHtml(p.a)} · ${bkk ? '' : 'จ.'}${escapeHtml(p.p)}</div>
-      <div class="text-sm text-gray-700">${bkk ? 'แขวง' : 'ต.'}${escapeHtml(p.t)}</div></div>`);
+      <div class="font-semibold text-[15px]">${bkk ? 'เขต' : 'อ.'}${escapeHtml(p.a)}</div>
+      <div class="text-sm text-gray-700">${bkk ? 'แขวง' : 'ต.'}${escapeHtml(p.t)} · ${bkk ? '' : 'จ.'}${escapeHtml(p.p)}</div></div>`);
   map.getSource('identify-shape')?.setData({ type: 'FeatureCollection', features: [t] });
 }
 
