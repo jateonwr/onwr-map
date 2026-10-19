@@ -70,6 +70,10 @@ const withDetail = (set, filter, base) => (src, op) => {
   ];
 };
 
+/* สีเส้นแนวคลองระบายน้ำ: ผู้ใช้เลือกเองได้ในการ์ดของชั้นนี้ (จำไว้ในเครื่อง) */
+const CANAL_COLOR_DEFAULT = '#24408e';
+let canalColor = (() => { try { const v = JSON.parse(localStorage.getItem('wm2:canal:color')); return /^#[0-9a-f]{6}$/i.test(v) ? v : CANAL_COLOR_DEFAULT; } catch { return CANAL_COLOR_DEFAULT; } })();
+
 const OVERLAYS = [
   {
     id: 'tung', name: 'ทุ่งรับน้ำ', url: 'data/tung.geojson', visible: true, opacity: 0.75,
@@ -230,7 +234,7 @@ const OVERLAYS = [
     // แนวคลองระบายน้ำ (โครงการ) จาก DigitizeRiver_MapToKML.kmz: แนวเขตคลอง ~180 ม. + จุดต้นคลอง/กลางทาง/ปลายคลอง
     // ตำบลที่ผ่าน (คำนวณจาก tha_admin3) เน้นได้จากแผงข้อมูล (canal-project-tambons.geojson)
     id: 'canal-project', name: 'แนวคลองระบายน้ำ', url: 'data/canal-project.geojson', visible: true, opacity: 0.55,
-    icon: 'line-thick', swatch: '#24408e', titleField: 'name',
+    icon: 'line-thick', get swatch() { return canalColor; }, titleField: 'name',
     labels: true, labelClass: 'canal-label', labelMinZoom: 7, labelAnchor: 'left', labelOffset: [10, 0],
     countText: () => '',
     // ขอบเขตที่แนวคลองผ่าน: เลือกเปิด ตำบล / อำเภอ / จังหวัด ได้ในการ์ดของชั้นนี้ (canal-project-areas.geojson, lv = t/a/p)
@@ -243,11 +247,11 @@ const OVERLAYS = [
         paint: { 'line-color': '#facc15', 'line-width': ['interpolate', ['linear'], ['zoom'], 6, 2, 10, 3, 14, 4] } },
       { id: 'canal-areas-p', type: 'line', source: 'canal-areas', filter: ['==', ['get', 'lv'], 'p'], layout: { 'line-join': 'round' },
         paint: { 'line-color': '#eab308', 'line-width': ['interpolate', ['linear'], ['zoom'], 5, 3, 9, 4.5, 13, 6] } },
-      { id: `${src}-fill`, type: 'fill', source: src, filter: ['==', ['get', 'part'], 'corridor'], paint: { 'fill-color': '#24408e', 'fill-opacity': op } },
+      { id: `${src}-fill`, type: 'fill', source: src, filter: ['==', ['get', 'part'], 'corridor'], paint: { 'fill-color': canalColor, 'fill-opacity': op } },
       { id: `${src}-line`, type: 'line', source: src, filter: ['==', ['get', 'part'], 'corridor'], layout: { 'line-join': 'round' },
-        paint: { 'line-color': '#24408e', 'line-width': ['interpolate', ['linear'], ['zoom'], 5, 3, 8, 4.5, 11, 6, 14, 8] } },   // เส้นหนา: ซูมออกเห็นเป็นแนวเดียวชัด ๆ
+        paint: { 'line-color': canalColor, 'line-width': ['interpolate', ['linear'], ['zoom'], 5, 3, 8, 4.5, 11, 6, 14, 8] } },   // เส้นหนา: ซูมออกเห็นเป็นแนวเดียวชัด ๆ
       { id: `${src}-pt`, type: 'circle', source: src, filter: ['==', ['get', 'part'], 'point'],
-        paint: { 'circle-color': '#24408e', 'circle-radius': CIRCLE_RADIUS_BY_ZOOM, 'circle-stroke-color': '#ffffff', 'circle-stroke-width': CIRCLE_STROKE_BY_ZOOM } },
+        paint: { 'circle-color': canalColor, 'circle-radius': CIRCLE_RADIUS_BY_ZOOM, 'circle-stroke-color': '#ffffff', 'circle-stroke-width': CIRCLE_STROKE_BY_ZOOM } },
     ],
     opacityProps: [['fill', 'fill-opacity', 1]],
   },
@@ -798,7 +802,7 @@ const LABEL_STYLES = {
   'river-label': { size: 14, weight: 600, color: '#1d4ed8', halo: 2 },
   'stn-label':   { size: 13, weight: 700, color: '#9a3412', sub: { size: 11, weight: 600 }, halo: 3, family: 'system-ui, sans-serif' },
   'visit-label': { size: 13, weight: 700, color: '#991b1b', halo: 2 },
-  'canal-label': { size: 13, weight: 700, color: '#24408e', halo: 2 },
+  'canal-label': { size: 13, weight: 700, get color() { return canalColor; }, halo: 2 },
   'prov-label':  { size: 13, weight: 600, color: '#111827', halo: 1.5, opacity: 0.85 },
   'basin-label': { size: 14, weight: 700, color: '#0f766e', halo: 2 },
 };
@@ -1266,7 +1270,10 @@ async function setCanalLv(lv, on) {
 }
 if (canalLv.size) onMapReady.push(() => setCanalLv([...canalLv][0], true));   // เปิดค้างไว้จากครั้งก่อน
 /* การ์ดในแผงชั้นข้อมูล: เปิด/ปิดขอบเขตที่แนวคลองผ่าน */
-layerNotes['canal-project'] = () => `<div class="mt-0.5 text-xs text-gray-500">ขอบเขต</div>
+layerNotes['canal-project'] = () => `<label class="mt-1 flex items-center gap-2 text-xs text-gray-500 cursor-pointer w-fit">สีเส้น
+    <input type="color" data-canal-color value="${canalColor}" aria-label="สีเส้นแนวคลอง" class="w-8 h-6 p-0 border border-gray-300 rounded bg-transparent cursor-pointer">
+    ${canalColor !== CANAL_COLOR_DEFAULT ? '<button type="button" data-canal-color-reset class="text-[11px] text-blue-600 underline">ค่าเดิม</button>' : ''}</label>
+  <div class="mt-1 text-xs text-gray-500">ขอบเขต</div>
   <div class="mt-0.5 flex items-center gap-x-3 whitespace-nowrap text-[13px] text-gray-700">
     ${CANAL_LV.map(([k, n]) => `<label class="flex items-center gap-1 cursor-pointer"><input type="checkbox" data-canal-lv="${k}" ${canalLv.has(k) ? 'checked' : ''} class="w-4 h-4 accent-yellow-500">${n}</label>`).join('')}
   </div>`;
@@ -1285,6 +1292,20 @@ infoExtras.push((o, f) => {
     </div>`;
 });
 document.addEventListener('change', e => { const el = e.target.closest('[data-canal-lv]'); if (el) setCanalLv(el.dataset.canalLv, el.checked); });
+/* เปลี่ยนสีเส้นแนวคลอง: เส้น/พื้น/จุด/ชื่อ บนแผนที่หลัก + ไอคอนในแผง · หน้าจัดวางใช้เป็นสีเริ่มต้น */
+function setCanalColor(c, { final = false } = {}) {
+  canalColor = c;
+  for (const [id, prop] of [['canal-project-line', 'line-color'], ['canal-project-fill', 'fill-color'], ['canal-project-pt', 'circle-color']])
+    if (map.getLayer(id)) map.setPaintProperty(id, prop, c);
+  document.documentElement.style.setProperty('--canal-color', c);
+  if (!final) return;
+  store.set('canal:color', c);
+  renderLayerPanel();
+}
+document.addEventListener('input', e => { if (e.target.matches('[data-canal-color]')) setCanalColor(e.target.value); });
+document.addEventListener('change', e => { if (e.target.matches('[data-canal-color]')) setCanalColor(e.target.value, { final: true }); });
+document.addEventListener('click', e => { if (e.target.closest('[data-canal-color-reset]')) { e.preventDefault(); setCanalColor(CANAL_COLOR_DEFAULT, { final: true }); } });
+document.documentElement.style.setProperty('--canal-color', canalColor);
 
 /* ============================================================
  *  แผง (sheet) เปิด/ปิด + ลากลงเพื่อปิด
