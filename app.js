@@ -1355,12 +1355,11 @@ async function identifyClick(e) {
   const pop = identifyPopup;
   const t = await adminAt(lng, lat);
   if (pop !== identifyPopup) return;
-  if (!t) { pop.setHTML(`<div class="text-sm">นอกเขตประเทศไทย / ไม่พบข้อมูล</div><div class="text-[11px] text-gray-400 mt-0.5">${lat.toFixed(5)}, ${lng.toFixed(5)}</div>`); map.getSource('identify-shape')?.setData(emptyFC()); return; }
+  if (!t) { pop.setHTML('<div class="text-sm">นอกเขตประเทศไทย / ไม่พบข้อมูล</div>'); map.getSource('identify-shape')?.setData(emptyFC()); return; }
   const p = t.properties, bkk = p.pc === 'TH10';
   pop.setHTML(`<div class="leading-snug">
-      <div class="font-semibold text-[15px]">${bkk ? 'แขวง' : 'ต.'}${escapeHtml(p.t)}</div>
-      <div class="text-sm text-gray-700">${bkk ? 'เขต' : 'อ.'}${escapeHtml(p.a)} · ${bkk ? '' : 'จ.'}${escapeHtml(p.p)}</div>
-      <div class="text-[11px] text-gray-400 mt-0.5 tabular-nums">${lat.toFixed(5)}, ${lng.toFixed(5)}</div></div>`);
+      <div class="font-semibold text-[15px]">${bkk ? 'เขต' : 'อ.'}${escapeHtml(p.a)} · ${bkk ? '' : 'จ.'}${escapeHtml(p.p)}</div>
+      <div class="text-sm text-gray-700">${bkk ? 'แขวง' : 'ต.'}${escapeHtml(p.t)}</div></div>`);
   map.getSource('identify-shape')?.setData({ type: 'FeatureCollection', features: [t] });
 }
 
