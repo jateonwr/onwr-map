@@ -772,7 +772,7 @@ function resolveLabels() {
 
   // ปุ่ม/โลโก้/แผงบนจอ: ไม่วางป้ายไว้ใต้ปุ่ม
   const mb = map.getContainer().getBoundingClientRect();
-  const ui = [...document.querySelectorAll('#btnMeasure, #btnVisits, #btnExport, #btnFocus, #btnFloodInfo, #floodPanel, #onwrLogo, #focusChip, #btnLayers, #btnCompass, #zoomBox, #btnRecord, #btnLocate, #recBar, #measurePanel, #zoneChip')]
+  const ui = [...document.querySelectorAll('#btnMeasure, #btnVisits, #btnExport, #btnFocus, #btnIdentify, #btnFloodInfo, #floodPanel, #onwrLogo, #focusChip, #btnLayers, #btnCompass, #zoomBox, #btnRecord, #btnLocate, #recBar, #measurePanel, #zoneChip')]
     .filter(el => el.offsetParent && getComputedStyle(el).visibility !== 'hidden')
     .map(el => { const b = el.getBoundingClientRect(); return { x1: b.left - mb.left - 4, y1: b.top - mb.top - 4, x2: b.right - mb.left + 4, y2: b.bottom - mb.top + 4 }; });
 
@@ -866,7 +866,9 @@ function renderLayerPanel() {
       <span class="text-sm ${b.id === activeBase ? 'text-blue-700 font-semibold' : 'text-gray-700'}">${b.name}</span>
     </button>`).join('');
 
-  $('overlayList').innerHTML = OVERLAYS.map(o => {
+  const PANEL_FIRST = ['canal-project'];
+  const panelOrder = [...OVERLAYS.filter(o => PANEL_FIRST.includes(o.id)), ...OVERLAYS.filter(o => !PANEL_FIRST.includes(o.id))];
+  $('overlayList').innerHTML = panelOrder.map(o => {
     const st = overlayState[o.id];
     const failed = !map.getSource(o.id);
     // รายชื่อ (พับเก็บได้ · ค่าเริ่มต้นพับไว้ · จำสถานะไว้ในเครื่อง)
@@ -1306,6 +1308,61 @@ document.addEventListener('input', e => { if (e.target.matches('[data-canal-colo
 document.addEventListener('change', e => { if (e.target.matches('[data-canal-color]')) setCanalColor(e.target.value, { final: true }); });
 document.addEventListener('click', e => { if (e.target.closest('[data-canal-color-reset]')) { e.preventDefault(); setCanalColor(CANAL_COLOR_DEFAULT, { final: true }); } });
 document.documentElement.style.setProperty('--canal-color', canalColor);
+
+/* ---------- โหมด "แตะดู ต./อ./จ.": แตะแผนที่ → ป้ายบอกตำบล อำเภอ จังหวัด ณ จุดนั้น + ขอบตำบล ----------
+   หาอำเภอจากขอบเขตหยาบ (amphoes-area) แล้วตรวจตำบลจากรูปละเอียดรายอำเภอ (data/detail/tambon/<อำเภอ>.json) */
+let identifyOn = false, identifyPopup = null;
+const tambonFileCache = new Map();
+const tambonFile = ac => {
+  if (!tambonFileCache.has(ac)) tambonFileCache.set(ac, fetch(`data/detail/tambon/${ac}.json`).then(r => r.ok ? r.json() : emptyFC()).catch(() => { tambonFileCache.delete(ac); return emptyFC(); }));
+  return tambonFileCache.get(ac);
+};
+async function adminAt(lng, lat) {
+  let list;
+  try { list = await loadAmphoeAreas(); } catch { return null; }
+  const pad = 0.02;
+  const cands = list.filter(({ b }) => lng >= b[0] - pad && lng <= b[2] + pad && lat >= b[1] - pad && lat <= b[3] + pad)
+    .sort((x, y) => inGeometry(lng, lat, y.f.geometry) - inGeometry(lng, lat, x.f.geometry));   // อำเภอที่หยาบครอบจุดก่อน
+  for (const c of cands) {
+    const fc = await tambonFile(c.f.properties.code);
+    const t = fc.features.find(f => inGeometry(lng, lat, f.geometry));
+    if (t) return t;
+  }
+  return null;
+}
+function setIdentify(on) {
+  identifyOn = on;
+  const b = $('btnIdentify');
+  b.classList.toggle('bg-blue-600', on); b.classList.toggle('text-white', on);
+  b.classList.toggle('bg-white', !on); b.classList.toggle('text-gray-700', !on);
+  b.setAttribute('aria-pressed', String(on));
+  map.getCanvas().style.cursor = on ? 'crosshair' : '';
+  if (on) { toast('แตะแผนที่เพื่อดู ต. อ. จ.'); loadAmphoeAreas().catch(() => {}); }
+  else { identifyPopup?.remove(); identifyPopup = null; map.getSource('identify-shape')?.setData(emptyFC()); }
+}
+$('btnIdentify').onclick = () => setIdentify(!identifyOn);
+onMapReady.push(() => {
+  map.addSource('identify-shape', { type: 'geojson', data: emptyFC() });
+  map.addLayer({ id: 'identify-line', type: 'line', source: 'identify-shape', layout: { 'line-join': 'round' },
+    paint: { 'line-color': '#db2777', 'line-width': ['interpolate', ['linear'], ['zoom'], 7, 2.5, 12, 4], 'line-opacity': 0.95 } });
+});
+clickInterceptors.unshift(e => identifyOn ? (identifyClick(e), true) : false);
+async function identifyClick(e) {
+  const { lng, lat } = e.lngLat;
+  identifyPopup?.remove();
+  identifyPopup = new maplibregl.Popup({ closeButton: true, closeOnClick: false, maxWidth: '280px', className: 'identify-pop' })
+    .setLngLat([lng, lat]).setHTML('<div class="text-sm text-gray-500">กำลังหา…</div>').addTo(map);
+  const pop = identifyPopup;
+  const t = await adminAt(lng, lat);
+  if (pop !== identifyPopup) return;
+  if (!t) { pop.setHTML(`<div class="text-sm">นอกเขตประเทศไทย / ไม่พบข้อมูล</div><div class="text-[11px] text-gray-400 mt-0.5">${lat.toFixed(5)}, ${lng.toFixed(5)}</div>`); map.getSource('identify-shape')?.setData(emptyFC()); return; }
+  const p = t.properties, bkk = p.pc === 'TH10';
+  pop.setHTML(`<div class="leading-snug">
+      <div class="font-semibold text-[15px]">${bkk ? 'แขวง' : 'ต.'}${escapeHtml(p.t)}</div>
+      <div class="text-sm text-gray-700">${bkk ? 'เขต' : 'อ.'}${escapeHtml(p.a)} · ${bkk ? '' : 'จ.'}${escapeHtml(p.p)}</div>
+      <div class="text-[11px] text-gray-400 mt-0.5 tabular-nums">${lat.toFixed(5)}, ${lng.toFixed(5)}</div></div>`);
+  map.getSource('identify-shape')?.setData({ type: 'FeatureCollection', features: [t] });
+}
 
 /* ============================================================
  *  แผง (sheet) เปิด/ปิด + ลากลงเพื่อปิด

@@ -102,6 +102,8 @@
     @keyframes photoPulse { from { transform: scale(1); opacity: .9; } to { transform: scale(1.8); opacity: 0; } }
     [data-hscroll] { scrollbar-width: none; -webkit-overflow-scrolling: touch; }
     [data-hscroll]::-webkit-scrollbar { display: none; }
+    .identify-pop .maplibregl-popup-content { border-radius: 12px; padding: 8px 28px 8px 12px; box-shadow: 0 4px 16px rgba(0,0,0,.18); font-family: "Noto Sans Thai", system-ui, sans-serif; }
+    .identify-pop .maplibregl-popup-close-button { font-size: 18px; width: 26px; height: 26px; right: 2px; top: 2px; color: #6b7280; }
     .fp-pin { width: 30px; height: 40px; cursor: grab; filter: drop-shadow(0 2px 2px rgba(0,0,0,.35)); }
     #map .basin-label, #map .prov-label { pointer-events: auto; cursor: pointer; }
     .tung-label .c { font-size: calc(13px * var(--ls, 1)); font-weight: 600; margin-top: 1px; }
@@ -208,6 +210,12 @@
     <button id="btnFocus" aria-haspopup="menu" aria-label="เลือกพื้นที่"
       class="pointer-events-auto self-start w-12 h-12 flex-none rounded-full bg-white text-gray-700 shadow-md grid place-items-center active:opacity-80">
       <svg class="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><rect x="3" y="3" width="18" height="18" rx="3" stroke-dasharray="4 2.6"/><path d="M8 15.5l2.2-6 3 3.2 2.8-3.2v6z" fill="currentColor" stroke="none"/></svg>
+    </button>
+
+    <!-- แตะดู ต./อ./จ. ณ จุดบนแผนที่ -->
+    <button id="btnIdentify" aria-label="แตะดู ตำบล อำเภอ จังหวัด" aria-pressed="false"
+      class="pointer-events-auto self-start w-12 h-12 flex-none rounded-full bg-white text-gray-700 shadow-md grid place-items-center active:opacity-80">
+      <svg class="w-6 h-6" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 2.2a1.3 1.3 0 110 2.6 1.3 1.3 0 010-2.6zM13.2 14h-2.4V8.6h2.4V14z"/></svg>
     </button>
 
     <!-- แผงวัดระยะ -->
@@ -498,12 +506,12 @@
   <div id="toast" class="fixed left-1/2 -translate-x-1/2 safe-bottom mb-24 z-40 bg-gray-900 text-white text-sm rounded-lg px-4 py-2.5 shadow-lg hidden max-w-[90vw] text-center"></div>
 
   <!-- เปลี่ยนเลข ?v= ทุกครั้งที่แก้ไฟล์ .js เพื่อให้มือถือโหลดไฟล์ใหม่ -->
-  <script src="app.js?v=127"></script>
-  <script src="sheet.js?v=127"></script>
-  <script src="track.js?v=127"></script>
-  <script src="measure.js?v=127"></script>
-  <script src="export-render.js?v=127"></script>
-  <script src="export.js?v=127"></script>
-  <script src="photos.js?v=127"></script>
+  <script src="app.js?v=129"></script>
+  <script src="sheet.js?v=129"></script>
+  <script src="track.js?v=129"></script>
+  <script src="measure.js?v=129"></script>
+  <script src="export-render.js?v=129"></script>
+  <script src="export.js?v=129"></script>
+  <script src="photos.js?v=129"></script>
 </body>
 </html>
